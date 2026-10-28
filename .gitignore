@@ -4,3 +4,15 @@
 *.log
 .DS_Store
 Thumbs.db
+
+# Never commit evidence or generated samples
+/samples
+*.evtx
+*.E01
+*.Ex01
+*.vmdk
+*.vhd
+*.vhdx
+*.dd
+*.raw
+*.img

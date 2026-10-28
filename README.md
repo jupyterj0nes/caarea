@@ -34,7 +34,7 @@ cargo build --release          # binary in target/release/caarea[.exe]
 
 | You have | Run |
 | :--- | :--- |
-| A disk image (E01, Ex01, raw, dd, 001) | `caarea -f disk.E01 -o out.csv` |
+| A disk image (E01, Ex01, raw, dd, 001) or a virtual disk (VMDK, VHD, VHDX) | `caarea -f disk.E01 -o out.csv` |
 | Triage packages (KAPE, Velociraptor, UAC, Cortex XDR, CyLR), zipped or not | `caarea -d /path/to/packages -o out.csv` |
 | A folder you collected by hand (`C:\Windows\System32\winevt\Logs`, `/var/log`, ...) | `caarea -d /path/to/folder -o out.csv` |
 | Single files (an EVTX, a hive, an `audit.log`) | `caarea -f Security.evtx -f SYSTEM -f audit.log -o out.csv` |
@@ -103,7 +103,7 @@ Every `.evtx` in a folder is parsed and filtered by provider and event id, so re
 
 ### Disk images
 
-MBR and GPT partition tables, NTFS traversal, BitLocker detection. From the live volume and from **every Volume Shadow Copy**: event logs, `config` hives with their transaction logs, `Amcache.hve`, `NTUSER.DAT` and `UsrClass.dat` of every profile. Shadow copies are read with [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs), pure Rust, straight from the image.
+E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or flat; Hyper-V VHD and VHDX, fixed or dynamic) are read in place, without converting or mounting. MBR and GPT partition tables, NTFS traversal, BitLocker detection. From the live volume and from **every Volume Shadow Copy**: event logs, `config` hives with their transaction logs, `Amcache.hve`, `NTUSER.DAT` and `UsrClass.dat` of every profile. Shadow copies are read with [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs), pure Rust, straight from the image.
 
 ---
 
@@ -153,7 +153,7 @@ Beyond the unit tests, the parsers were checked against:
 
 - 524 public EVTX samples ([EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES), [EVTX-to-MITRE-Attack](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack), DeepBlueCLI): the count per file matches `Get-WinEvent` exactly for every supported event id.
 - The registry test corpus of [yarp](https://github.com/msuhanov/yarp): set `CAAREA_YARP_HIVES=<path>/hives_for_tests` and the test suite compares the replayed dirty hives with the copies recovered by Windows 10 and Windows 7.
-- Real `pacct` files, Ubuntu 24.04 logs and an NTFS volume image produced on a Linux box.
+- Real `pacct` files, Ubuntu 24.04 logs, an NTFS volume image produced on a Linux box and a 50 GB Windows workstation VMDK (dirty SYSTEM, SOFTWARE, DEFAULT and Amcache hives replayed from their logs).
 
 The TaskScheduler operational channel is off by default on Windows clients and no public corpus has it. `scripts\gen_taskscheduler_sample.ps1` turns it on (one UAC prompt), creates and runs a harmless task, exports the channel and runs CAAREA on it.
 

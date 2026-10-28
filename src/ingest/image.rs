@@ -45,7 +45,17 @@ pub fn is_supported_image(path: &Path) -> bool {
         return true;
     }
 
-    false
+    // VMware: only base descriptors. Skip flat extents (name-flat.vmdk), split extents
+    // (name-s001.vmdk), change tracking (name-ctk.vmdk) and snapshots (name-000001.vmdk).
+    if let Some(stem) = filename.strip_suffix(".vmdk") {
+        let is_flat = stem.ends_with("-flat");
+        let is_ctk = stem.ends_with("-ctk");
+        let is_split = stem.len() > 5 && stem[stem.len() - 5..].starts_with("-s") && stem[stem.len() - 3..].chars().all(|c| c.is_ascii_digit());
+        let is_snapshot = stem.len() > 7 && stem.as_bytes()[stem.len() - 7] == b'-' && stem[stem.len() - 6..].chars().all(|c| c.is_ascii_digit());
+        return !(is_flat || is_ctk || is_split || is_snapshot);
+    }
+
+    filename.ends_with(".vhd") || filename.ends_with(".vhdx")
 }
 
 /// Wrapper that adds a byte offset to all Read/Seek operations, enabling partition-level I/O
@@ -470,6 +480,26 @@ pub fn unpack_disk_image(
 
         let mut buf_reader = BufReader::new(ewf_reader);
         process_seekable_image(&mut buf_reader, total_size, &live_dir, &vss_root, silent)?
+    } else if lower.ends_with(".vmdk") {
+        let vmdk_reader = crate::ingest::vmdk::VmdkReader::open(&path_str).map_err(|e| format!("Failed to open VMDK image: {}", e))?;
+        let total_size = vmdk_reader.total_size();
+        log_message(
+            silent,
+            &format!("  ├─ VMDK virtual disk capacity: {:.2} GB", total_size as f64 / 1_073_741_824.0),
+        );
+
+        let mut buf_reader = BufReader::new(vmdk_reader);
+        process_seekable_image(&mut buf_reader, total_size, &live_dir, &vss_root, silent)?
+    } else if lower.ends_with(".vhd") || lower.ends_with(".vhdx") {
+        let (vhd_reader, total_size) =
+            crate::ingest::vhd::open_virtual_disk(&path_str).map_err(|e| format!("Failed to open VHD/VHDX image: {}", e))?;
+        log_message(
+            silent,
+            &format!("  ├─ VHD/VHDX virtual disk capacity: {:.2} GB", total_size as f64 / 1_073_741_824.0),
+        );
+
+        let mut buf_reader = BufReader::new(vhd_reader);
+        process_seekable_image(&mut buf_reader, total_size, &live_dir, &vss_root, silent)?
     } else {
         let file = File::open(image_path)?;
         let total_size = file.metadata()?.len();
@@ -538,7 +568,14 @@ fn process_seekable_image<R: Read + Seek>(
         let mut part_reader = OffsetReader::new(reader, part_offset);
         let vss = match VssVolume::new(&mut part_reader) {
             Ok(v) if v.store_count() > 0 => v,
-            _ => continue,
+            Ok(_) => {
+                log_message(silent, &format!("  ├─ Partition {}: no Volume Shadow Copy stores", idx + 1));
+                continue;
+            }
+            Err(e) => {
+                log_message(silent, &format!("  ├─ Partition {}: no Volume Shadow Copy catalog ({})", idx + 1, e));
+                continue;
+            }
         };
         log_message(
             silent,

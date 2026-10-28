@@ -1,6 +1,8 @@
 pub mod archive;
 pub mod image;
 pub mod triage;
+pub mod vhd;
+pub mod vmdk;
 
 use chrono::Local;
 use indicatif::{ProgressBar, ProgressStyle};
