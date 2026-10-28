@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use vshadow::VssVolume;
 
 use crate::utils::filetime_to_iso;
+use crate::provenance::Provenance;
 
 const NTFS_SIGNATURE: &[u8] = b"NTFS    ";
 const BITLOCKER_SIGNATURE: &[u8] = b"-FVE-FS-";
@@ -245,7 +246,129 @@ fn extract_artifacts_from_volume<R: Read + Seek>(volume: &mut R, part_dir: &Path
         }
     }
 
+    // 5. Extract Prefetch files (Windows\Prefetch\*.pf)
+    if let Ok(pf_dir) = navigate_to_path(&ntfs, &root_dir, volume, &["Windows", "Prefetch"]) {
+        if let Ok(count) = dump_files_matching(&ntfs, &pf_dir, volume, &part_dir.join("Prefetch"), ".pf") {
+            total_extracted += count;
+        }
+    }
+
+    // 6. Scheduled task definitions (Windows\System32\Tasks\**), Windows Error Reporting
+    //    (ProgramData\Microsoft\Windows\WER\Report{Archive,Queue}\**\Report.wer), Defender
+    //    support logs (MPLog-*.log, MPDetection-*.log) and PCA logs (Windows\appcompat\pca)
+    type TreeSpec = (&'static [&'static str], &'static str, fn(&str) -> bool);
+    let trees: [TreeSpec; 5] = [
+        (&["Windows", "System32", "Tasks"], "Tasks", |_n| true),
+        (&["ProgramData", "Microsoft", "Windows", "WER", "ReportArchive"], "WER/ReportArchive", |n| n.eq_ignore_ascii_case("report.wer")),
+        (&["ProgramData", "Microsoft", "Windows", "WER", "ReportQueue"], "WER/ReportQueue", |n| n.eq_ignore_ascii_case("report.wer")),
+        (&["ProgramData", "Microsoft", "Windows Defender", "Support"], "Defender/Support", |n| {
+            let l = n.to_ascii_lowercase();
+            (l.starts_with("mplog-") || l.starts_with("mpdetection-")) && l.ends_with(".log")
+        }),
+        (&["Windows", "appcompat", "pca"], "appcompat/pca", |n| n.to_ascii_lowercase().ends_with(".txt")),
+    ];
+    for (path, dest, pred) in trees {
+        if let Ok(dir) = navigate_to_path(&ntfs, &root_dir, volume, path) {
+            total_extracted += dump_tree_matching(&ntfs, &dir, volume, &part_dir.join(dest), pred, 6);
+        }
+    }
+
+    // 7. PowerShell console history of every profile
+    //    (Users\<user>\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt)
+    if let Ok(users_dir) = navigate_to_path(&ntfs, &root_dir, volume, &["Users"]) {
+        total_extracted += dump_user_files(
+            &ntfs,
+            &users_dir,
+            volume,
+            &part_dir.join("Users"),
+            &["AppData", "Roaming", "Microsoft", "Windows", "PowerShell", "PSReadLine"],
+            "PSReadLine",
+            |n| n.to_ascii_lowercase().ends_with("_history.txt"),
+        );
+    }
+
     Ok(total_extracted)
+}
+
+/// Dumps every file under `dir` (recursively, `depth` levels) whose name satisfies `pred`,
+/// keeping the relative directory layout under `dest`.
+fn dump_tree_matching<R: Read + Seek>(
+    ntfs: &ntfs::Ntfs,
+    dir: &ntfs::NtfsFile,
+    reader: &mut R,
+    dest: &Path,
+    pred: fn(&str) -> bool,
+    depth: usize,
+) -> usize {
+    let Ok(index) = dir.directory_index(reader) else { return 0 };
+    let mut files = Vec::new();
+    let mut subdirs = Vec::new();
+    let mut entries = index.entries();
+    while let Some(Ok(entry)) = entries.next(reader) {
+        if let Some(Ok(key)) = entry.key() {
+            let name = key.name().to_string_lossy().to_string();
+            if name == "." || name == ".." || name.starts_with('$') {
+                continue;
+            }
+            if key.is_directory() {
+                subdirs.push((name, entry.file_reference()));
+            } else if pred(&name) {
+                files.push((name, entry.file_reference()));
+            }
+        }
+    }
+    let mut count = 0;
+    if !files.is_empty() {
+        let _ = fs::create_dir_all(dest);
+        for (name, f_ref) in files {
+            if let Ok(file) = f_ref.to_file(ntfs, reader) {
+                if dump_ntfs_file_data(&file, reader, &dest.join(&name)).is_ok() {
+                    count += 1;
+                }
+            }
+        }
+    }
+    if depth > 0 {
+        for (name, d_ref) in subdirs {
+            if let Ok(sub) = d_ref.to_file(ntfs, reader) {
+                count += dump_tree_matching(ntfs, &sub, reader, &dest.join(&name), pred, depth - 1);
+            }
+        }
+    }
+    count
+}
+
+/// For every profile under `users_dir`, dumps the files of `sub_path` that satisfy `pred`
+/// into `dest/<user>/<label>/`.
+fn dump_user_files<R: Read + Seek>(
+    ntfs: &ntfs::Ntfs,
+    users_dir: &ntfs::NtfsFile,
+    reader: &mut R,
+    dest: &Path,
+    sub_path: &[&str],
+    label: &str,
+    pred: fn(&str) -> bool,
+) -> usize {
+    let Ok(index) = users_dir.directory_index(reader) else { return 0 };
+    let mut user_dirs = Vec::new();
+    let mut entries = index.entries();
+    while let Some(Ok(entry)) = entries.next(reader) {
+        if let Some(Ok(key)) = entry.key() {
+            let name = key.name().to_string_lossy().to_string();
+            if name != "." && name != ".." && !name.starts_with('$') && key.is_directory() {
+                user_dirs.push((name, entry.file_reference()));
+            }
+        }
+    }
+    let mut count = 0;
+    for (username, u_ref) in user_dirs {
+        if let Ok(user_dir) = u_ref.to_file(ntfs, reader) {
+            if let Ok(target) = navigate_to_path(ntfs, &user_dir, reader, sub_path) {
+                count += dump_tree_matching(ntfs, &target, reader, &dest.join(&username).join(label), pred, 0);
+            }
+        }
+    }
+    count
 }
 
 /// Navigates through NTFS directories matching a path component array (case-insensitive)
@@ -446,11 +569,11 @@ fn dump_ntfs_file_data<R: Read + Seek>(file: &ntfs::NtfsFile, reader: &mut R, ou
 }
 
 /// Result of staging a disk image: the live volume artifacts plus one directory per Volume
-/// Shadow Copy, each tagged with the snapshot creation time (`vss:2026-09-04T08:12:53Z`).
+/// Shadow Copy, each with its provenance (`vss` plus the snapshot creation time).
 #[derive(Debug, Clone)]
 pub struct ImageExtraction {
     pub live_dir: PathBuf,
-    pub shadow_dirs: Vec<(PathBuf, String)>,
+    pub shadow_dirs: Vec<(PathBuf, Provenance)>,
 }
 
 /// Unpacks forensic execution artifacts from an E01 or RAW disk image into a destination staging directory
@@ -523,7 +646,7 @@ fn process_seekable_image<R: Read + Seek>(
     live_dir: &Path,
     vss_root: &Path,
     silent: bool,
-) -> Result<Vec<(PathBuf, String)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(PathBuf, Provenance)>, Box<dyn std::error::Error>> {
     let partitions = find_ntfs_partitions(reader, image_size).map_err(|e| format!("Partition scan error: {}", e))?;
 
     if partitions.is_empty() {
@@ -536,7 +659,7 @@ fn process_seekable_image<R: Read + Seek>(
     );
 
     let mut total_extracted = 0;
-    let mut shadow_dirs: Vec<(PathBuf, String)> = Vec::new();
+    let mut shadow_dirs: Vec<(PathBuf, Provenance)> = Vec::new();
 
     for (idx, &part_offset) in partitions.iter().enumerate() {
         if verify_bitlocker_signature(reader, part_offset) {
@@ -600,7 +723,7 @@ fn process_seekable_image<R: Read + Seek>(
                             silent,
                             &format!("  │   ├─ VSS store {} (created {}): extracted {} artifacts", s, created_iso, count),
                         );
-                        shadow_dirs.push((store_dir, format!("vss:{}", created_iso)));
+                        shadow_dirs.push((store_dir, Provenance::vss(created_iso.clone())));
                     }
                     Err(e) => {
                         log_message(silent, &format!("  │   ⚠️ VSS store {} (created {}): {}", s, created_iso, e));

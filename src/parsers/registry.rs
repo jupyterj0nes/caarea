@@ -409,6 +409,75 @@ pub fn parse_registry_file_with_defaults(
     }
 
     // ==========================================
+    // 6b. MUICache (UsrClass.dat) and the Program Compatibility Assistant store (NTUSER.DAT):
+    //     programs launched by the user, keyed by path. Only the key time is known.
+    // ==========================================
+    let mui_paths = [
+        r"Local Settings\Software\Microsoft\Windows\Shell\MuiCache",
+        r"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache",
+    ];
+    for path in mui_paths {
+        if let Ok(Some(key)) = hive.open(path) {
+            if let (Some(timestamp), Ok(values)) = (filetime_to_iso(key.last_written), key.values()) {
+                let mut seen: HashSet<String> = HashSet::new();
+                for val in values.into_iter().flatten() {
+                    let name = val.name.clone();
+                    let lower = name.to_ascii_lowercase();
+                    let (exe, what) = if let Some(p) = lower.strip_suffix(".friendlyappname") {
+                        (name[..p.len()].to_string(), "FriendlyAppName")
+                    } else if let Some(p) = lower.strip_suffix(".applicationcompany") {
+                        (name[..p.len()].to_string(), "ApplicationCompany")
+                    } else {
+                        continue;
+                    };
+                    if !seen.insert(exe.to_ascii_lowercase()) {
+                        continue;
+                    }
+                    let label = match val.data() {
+                        Data::String(s) => s,
+                        _ => String::new(),
+                    };
+                    events.push(Event {
+                        timestamp: timestamp.clone(),
+                        computer: computer_name.clone(),
+                        artifact: "registry:muicache".to_string(),
+                        event_id: 0,
+                        pid: 0,
+                        subject_username: user_name.clone(),
+                        target_username: user_name.clone(),
+                        processname: exe,
+                        commandline: Some(format!("MUICache {}: {} (key time)", what, label)),
+                        parentprocessname: "explorer.exe".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    let pca_store = r"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store";
+    if let Ok(Some(key)) = hive.open(pca_store) {
+        if let (Some(timestamp), Ok(values)) = (filetime_to_iso(key.last_written), key.values()) {
+            for val in values.into_iter().flatten() {
+                let name = val.name.clone();
+                if name.is_empty() {
+                    continue;
+                }
+                events.push(Event {
+                    timestamp: timestamp.clone(),
+                    computer: computer_name.clone(),
+                    artifact: "registry:pca_store".to_string(),
+                    event_id: 0,
+                    pid: 0,
+                    subject_username: user_name.clone(),
+                    target_username: user_name.clone(),
+                    processname: name,
+                    commandline: Some("Program Compatibility Assistant store entry (key time)".to_string()),
+                    parentprocessname: "PcaSvc".to_string(),
+                });
+            }
+        }
+    }
+
+    // ==========================================
     // 7. Scheduled Tasks (TaskCache in SOFTWARE)
     // ==========================================
     let tasks_found = tasks::tasks(&hive);

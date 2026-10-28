@@ -1,6 +1,8 @@
+pub mod carve;
 mod cli;
 pub mod ingest;
 pub mod parsers;
+pub mod provenance;
 pub mod timeline;
 pub mod utils;
 
@@ -12,19 +14,16 @@ use chrono::Local;
 use parsers::evtx::{self, Event};
 use parsers::linux::HostTimezone;
 use parsers::registry;
+pub use provenance::{artifact_base, Provenance};
 
-/// Separator used to tag events recovered from a Volume Shadow Copy: `evtx:4688 [vss:2026-09-04T08:12:53Z]`
-const ORIGIN_TAG_OPEN: &str = " [";
-
-/// Artifact name without its provenance tag
-pub fn artifact_base(artifact: &str) -> &str {
-    artifact.split(ORIGIN_TAG_OPEN).next().unwrap_or(artifact)
-}
-
-/// Appends a provenance tag (e.g. `vss:<snapshot time>`) to every event of a directory
-pub fn tag_events(events: &mut [Event], tag: &str) {
+/// Applies a provenance (shadow copy, recovered, carved) to every event of a directory.
+/// Live provenance leaves the artifact names untouched.
+pub fn tag_events(events: &mut [Event], prov: &Provenance) {
+    if prov.is_live() {
+        return;
+    }
     for e in events.iter_mut() {
-        e.artifact = format!("{}{}{}]", e.artifact, ORIGIN_TAG_OPEN, tag);
+        e.artifact = prov.apply(&e.artifact);
     }
 }
 
@@ -38,16 +37,20 @@ fn log_message(silent: bool, message: &str) {
 
 /// Removes exact duplicates (same artifact seen twice, e.g. from a live file and a copy in a
 /// triage package, or from the live volume and a shadow copy). Two events are duplicates only
-/// when *every* column is identical (ignoring the provenance tag), so distinct executions that
-/// share a timestamp are preserved. When a live event and its shadow-copy twin collide the live
-/// one is kept; among shadow copies the oldest snapshot wins.
+/// when *every* column is identical (ignoring the provenance), so distinct executions that
+/// share a timestamp are preserved. When twins collide the one with the best provenance is
+/// kept, in this order: live, shadow copy, recovered structure, transaction log, carved,
+/// carved and recovered. Among shadow copies the oldest snapshot wins; among carved rows the
+/// lowest offset.
 pub fn dedup_events(events: &mut Vec<Event>) -> usize {
     let before = events.len();
     events.sort_by(|a, b| {
+        let (base_a, prov_a) = provenance::split(&a.artifact);
+        let (base_b, prov_b) = provenance::split(&b.artifact);
         a.timestamp
             .cmp(&b.timestamp)
             .then_with(|| a.computer.cmp(&b.computer))
-            .then_with(|| artifact_base(&a.artifact).cmp(artifact_base(&b.artifact)))
+            .then_with(|| base_a.cmp(base_b))
             .then_with(|| a.event_id.cmp(&b.event_id))
             .then_with(|| a.pid.cmp(&b.pid))
             .then_with(|| a.subject_username.cmp(&b.subject_username))
@@ -55,7 +58,8 @@ pub fn dedup_events(events: &mut Vec<Event>) -> usize {
             .then_with(|| a.processname.cmp(&b.processname))
             .then_with(|| a.commandline.cmp(&b.commandline))
             .then_with(|| a.parentprocessname.cmp(&b.parentprocessname))
-            .then_with(|| a.artifact.cmp(&b.artifact)) // untagged (live) sorts before "[vss:...]"
+            .then_with(|| prov_a.origin.rank().cmp(&prov_b.origin.rank()))
+            .then_with(|| prov_a.detail.cmp(&prov_b.detail))
     });
     events.dedup_by(|later, first| {
         later.timestamp == first.timestamp
@@ -144,6 +148,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     let run_evtx = modules == "evtx" || modules == "all";
     let run_registry = modules == "registry" || modules == "all";
+    let run_windows = modules == "windows" || modules == "all";
     let run_linux = modules == "linux" || modules == "all";
 
     let mut all_events: Vec<Event> = vec![];
@@ -153,7 +158,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     for dir in &workspace.directories {
         let path = Path::new(dir);
         let hint = workspace.hostname_hint(dir);
-        let origin = workspace.origin_tag(dir);
+        let origin = workspace.origin(dir);
         let looks_linux = parsers::linux::is_linux_target(path);
         log_message(
             silent,
@@ -173,11 +178,14 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         if run_registry {
             dir_events.extend(registry::process_registry_target_with_hint(path, silent, hint)?);
         }
+        if run_windows {
+            dir_events.extend(parsers::windows::process_windows_target(path, silent, hint));
+        }
         if run_linux {
             dir_events.extend(parsers::linux::process_linux_target_with_hint(path, silent, hint, tz_override.as_ref())?);
         }
-        if let Some(tag) = origin {
-            tag_events(&mut dir_events, tag);
+        if let Some(prov) = origin {
+            tag_events(&mut dir_events, prov);
         }
         all_events.extend(dir_events);
     }
@@ -199,6 +207,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         } else if looks_hive {
             if run_registry {
                 all_events.extend(registry::parse_registry_file(path, silent)?);
+            }
+        } else if let Some(win_events) = parsers::windows::process_windows_file(path, &header[..bytes_read], silent) {
+            if run_windows {
+                all_events.extend(win_events);
             }
         } else if run_linux {
             let parent = path.parent();
@@ -294,10 +306,10 @@ mod tests {
         let mut old_copy = ev(ts, "cmd.exe", "cmd /c live", 10);
         let mut only_in_vss = ev(ts, "evil.exe", "evil.exe -x", 11);
         let mut only_in_vss_newer = ev(ts, "evil.exe", "evil.exe -x", 11);
-        tag_events(std::slice::from_mut(&mut old_copy), "vss:2026-09-01T00:00:00Z");
-        tag_events(std::slice::from_mut(&mut only_in_vss_newer), "vss:2026-09-02T00:00:00Z");
-        tag_events(std::slice::from_mut(&mut only_in_vss), "vss:2026-09-01T00:00:00Z");
-        assert_eq!(only_in_vss.artifact, "linux:shell:bash_history [vss:2026-09-01T00:00:00Z]");
+        tag_events(std::slice::from_mut(&mut old_copy), &Provenance::vss("2026-09-01T00:00:00Z"));
+        tag_events(std::slice::from_mut(&mut only_in_vss_newer), &Provenance::vss("2026-09-02T00:00:00Z"));
+        tag_events(std::slice::from_mut(&mut only_in_vss), &Provenance::vss("2026-09-01T00:00:00Z"));
+        assert_eq!(only_in_vss.artifact, "linux:shell:bash_history:vss [2026-09-01T00:00:00Z]");
         assert_eq!(artifact_base(&only_in_vss.artifact), "linux:shell:bash_history");
 
         let mut events = vec![old_copy, only_in_vss_newer, live.clone(), only_in_vss];
@@ -305,7 +317,36 @@ mod tests {
         assert_eq!(removed, 2);
         assert_eq!(events.len(), 2);
         assert!(events.iter().any(|e| e == &live), "live twin must survive untagged");
-        assert!(events.iter().any(|e| e.artifact.ends_with("[vss:2026-09-01T00:00:00Z]") && e.processname == "evil.exe"));
+        assert!(events.iter().any(|e| e.artifact.ends_with(":vss [2026-09-01T00:00:00Z]") && e.processname == "evil.exe"));
+    }
+
+    #[test]
+    fn test_dedup_precedence_is_live_vss_deleted_carved() {
+        use provenance::Origin;
+        let ts = "2026-09-04T08:00:00.000000Z";
+        let mk = |origin: Origin, detail: &str| {
+            let mut e = ev(ts, "x.exe", "x.exe", 1);
+            tag_events(std::slice::from_mut(&mut e), &Provenance::new(origin, detail));
+            e
+        };
+        let mut events = vec![
+            mk(Origin::CarvedDeleted, "@0x10"),
+            mk(Origin::Carved, "@0x20"),
+            mk(Origin::Carved, "@0x10"),
+            mk(Origin::Deleted, ""),
+            mk(Origin::Vss, "2026-09-02T00:00:00Z"),
+        ];
+        assert_eq!(dedup_events(&mut events), 4);
+        assert_eq!(events[0].artifact, "linux:shell:bash_history:vss [2026-09-02T00:00:00Z]");
+
+        let mut carved_only = vec![mk(Origin::Carved, "@0x20"), mk(Origin::Carved, "@0x10")];
+        assert_eq!(dedup_events(&mut carved_only), 1);
+        assert_eq!(carved_only[0].artifact, "linux:shell:bash_history:carved [@0x10]");
+
+        let live = ev(ts, "x.exe", "x.exe", 1);
+        let mut with_live = vec![mk(Origin::Deleted, ""), live.clone()];
+        assert_eq!(dedup_events(&mut with_live), 1);
+        assert_eq!(with_live[0], live);
     }
 
     #[test]

@@ -3,7 +3,7 @@ use std::env;
 use std::path::Path;
 
 /// Valid values for `--modules`
-pub const VALID_MODULES: [&str; 4] = ["all", "evtx", "registry", "linux"];
+pub const VALID_MODULES: [&str; 5] = ["all", "evtx", "registry", "windows", "linux"];
 
 /// Function to define CLI arguments
 pub fn build_cli() -> Command {
@@ -31,7 +31,7 @@ pub fn build_cli() -> Command {
                 .short('m')
                 .long("modules")
                 .value_name("MODULES")
-                .help("Parsers to run: evtx, registry, linux, all")
+                .help("Parsers to run: evtx, registry, windows (prefetch and other file artifacts), linux, all")
                 .default_value("all"),
         )
         .arg(

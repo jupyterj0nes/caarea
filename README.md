@@ -17,9 +17,9 @@ Written in Rust. One static binary for Windows, Linux and macOS. No mounting, no
 ## What it does for you
 
 - **Windows and Linux in the same timeline.** A KAPE zip from the file server and a UAC tarball from the web server end up in one CSV, sorted together, each row stamped with its host.
-- **Reads the sources others skip.** Volume Shadow Copies inside E01/raw images, dirty registry hives (their transaction logs are replayed in memory), kernel process accounting (`pacct`), `auditd` execve records, PowerShell ScriptBlock text, Sysmon, scheduled tasks, WMI consumers.
+- **Reads the sources others skip.** Volume Shadow Copies inside E01/raw images, dirty registry hives (their transaction logs are replayed in memory), Prefetch (including the compressed Windows 10/11 format), PowerShell console history, scheduled task XML, Windows Error Reporting, Defender support logs, kernel process accounting (`pacct`), `auditd` execve records, PowerShell ScriptBlock and module logging, Sysmon, AppLocker, WMI consumers.
 - **Gets the time right.** Every timestamp is converted to UTC. Linux logs that only carry wall-clock time (classic syslog, `dpkg.log`, `ps`) are corrected with the host's own time zone, found in the evidence (`/etc/timezone`, `/etc/localtime`, `timedatectl`).
-- **Tells you where a row came from.** Events that only exist in a shadow copy are tagged with the snapshot time; a live event and its snapshot twin are not shown twice.
+- **Tells you where a row came from.** Events that only exist in a shadow copy are tagged with the snapshot time; a live event and its snapshot twin are not shown twice. The same vocabulary will mark rows recovered from freed structures and from carving.
 - **Treats evidence as hostile.** Archives are unpacked into an isolated, per-run temporary folder; entries cannot escape it, symlinks are never followed, and packages with the same file name from different hosts never overwrite each other. The evidence itself is only ever read.
 
 ---
@@ -39,7 +39,7 @@ cargo build --release          # binary in target/release/caarea[.exe]
 | A folder you collected by hand (`C:\Windows\System32\winevt\Logs`, `/var/log`, ...) | `caarea -d /path/to/folder -o out.csv` |
 | Single files (an EVTX, a hive, an `audit.log`) | `caarea -f Security.evtx -f SYSTEM -f audit.log -o out.csv` |
 
-Add `-m evtx`, `-m registry` or `-m linux` to run one parser family only. Add `--overwrite` to replace an existing CSV.
+Add `-m evtx`, `-m registry`, `-m windows` (Prefetch and the other Windows file artifacts) or `-m linux` to run one parser family only. Add `--overwrite` to replace an existing CSV.
 
 ---
 
@@ -51,7 +51,7 @@ An RFC 4180 CSV with ten columns. Timestamps are UTC with a fixed width (`YYYY-M
 | :--- | :--- |
 | `timestamp` | When it happened, UTC |
 | `computer` | Host name (from the event, the SYSTEM hive, the UAC hostname file or the package name) |
-| `artifact` | Where the row comes from: `evtx:4688`, `evtx:sysmon:1`, `registry:bam`, `linux:audit:execve`, ... Rows recovered from a shadow copy carry a suffix: `evtx:4688 [vss:2026-09-04T08:12:53Z]` |
+| `artifact` | Where the row comes from: `evtx:4688`, `evtx:sysmon:1`, `registry:bam`, `prefetch`, `linux:audit:execve`, ... Rows that were not read from the live evidence carry an extra segment and the detail in brackets: `evtx:4688:vss [2026-09-04T08:12:53Z]` (only in that shadow copy), `registry:bam:deleted` (recovered from a freed hive cell), `evtx:4688:carved [@0x1c3f80000]` (carved from raw bytes at that offset) |
 | `event_id` | Windows event id, 0 otherwise |
 | `pid` | Process id when the source has one (for 4688 it is the *new* process) |
 | `subject_username` | Who ran it |
@@ -75,17 +75,28 @@ Two real rows:
 
 | Source | Events / keys | Notes |
 | :--- | :--- | :--- |
-| Security.evtx | 4688 process creation, 4697 service install, 4698 task created | `DOMAIN\user`, PID from `NewProcessId`, task command pulled out of the task XML |
-| System.evtx | 7045 service installed | account from `AccountName` |
-| Sysmon | 1 process creation | image, command line, parent image, user |
-| PowerShell | 400 engine start, 800 pipeline, 4104 ScriptBlock | full script block text |
-| TaskScheduler/Operational | 106 registered, 129 launched, 200 action started | |
-| WMI-Activity/Operational | 5861 permanent consumer bound | consumer and command template |
+| Security.evtx | 4688 process creation, 4689 process exit, 4697 service install, 4698-4702 task created / deleted / enabled / disabled / updated, 1102 audit log cleared | `DOMAIN\user`, PID from `NewProcessId`, task command pulled out of the task XML |
+| System.evtx | 7045 service installed, 7034 service crashed, 7036 service state change, 104 log cleared, MsiInstaller 1033/1034/11707/11724 | account from `AccountName` |
+| Application.evtx | 1000 application error, 1001 Windows Error Reporting | faulting binary, module, exception |
+| Sysmon | 1 process creation, 5 process end, 6 driver loaded, 7 image loaded, 11 file created | image, command line, parent image, user |
+| PowerShell | 400 engine start, 800 pipeline, 4103 module logging, 4104 ScriptBlock | full script block text, command invocation with parameters |
+| TaskScheduler/Operational | 100, 102, 106, 107, 108, 118, 119, 129, 140, 141, 200, 201 | started, completed, registered, triggered, launched, updated, deleted, action started / completed |
+| WMI-Activity/Operational | 5857 provider loaded, 5858 query, 5859/5860 permanent / temporary consumer, 5861 consumer bound | query text, client PID |
+| AppLocker | 8002-8007, 8020-8022 | allowed, audited, blocked executables, scripts and packaged apps |
+| Windows Defender/Operational | 1015, 1116, 1117 | threat, path, process, action |
+| Shell-Core/Operational | 9707 / 9708 | Run / RunOnce command started / finished |
+| BITS-Client/Operational | 3, 4, 59, 60 | job created / completed, transfer started / stopped with URL |
+| Prefetch (`*.pf`) | up to eight run times per executable, run count, files loaded, volume | XP to Windows 11; the Windows 10/11 `MAM` compression is decoded in-process. Servers do not write Prefetch unless enabled |
+| PSReadLine `ConsoleHost_history.txt` | every command typed in an interactive PowerShell | no per-line time: rows carry the file time, in order |
+| `System32\Tasks\**` task XML | author, principal, triggers, every Exec / COM action | row time is the file's modification time |
+| WER `Report.wer` | crashed program, module, exception, PID | `ReportArchive` and `ReportQueue` |
+| Defender `MPLog-*.log`, `MPDetection-*.log` | processes the engine scanned on behalf of (with PID), behaviour-monitoring images, detections | |
+| PCA `PcaAppLaunchDic.txt`, `PcaGeneralDb*.txt` (Windows 11) | program launches with time, exit code | |
 | SYSTEM / SOFTWARE | BAM/DAM, ShimCache, services, Run/RunOnce, TaskCache, IFEO/Winlogon/AppInit, installed programs | |
-| NTUSER.DAT / UsrClass.dat | UserAssist, RunMRU, RecentDocs, TypedPaths, WordWheelQuery, Office TrustRecords, profile load/unload | user taken from the path (`Users\<name>\NTUSER.DAT`) |
+| NTUSER.DAT / UsrClass.dat | UserAssist, RunMRU, RecentDocs, TypedPaths, WordWheelQuery, MUICache, Compatibility Assistant store, Office TrustRecords, profile load/unload | user taken from the path (`Users\<name>\NTUSER.DAT`) |
 | Amcache.hve | files and programs with SHA-1 | |
 
-Every `.evtx` in a folder is parsed and filtered by provider and event id, so renamed channel files are fine. Dirty hives are repaired before parsing: `.LOG1`/`.LOG2` entries are verified (Marvin32 hashes), applied in sequence order and only when they belong to that hive. The result matches, byte for byte, what Windows itself produces when it loads the same hive.
+Every `.evtx` in a folder is parsed and filtered by provider and event id, so renamed channel files are fine. Rows that are identical in every column (two records with the same time, user, process and command line) are collapsed into one. Dirty hives are repaired before parsing: `.LOG1`/`.LOG2` entries are verified (Marvin32 hashes), applied in sequence order and only when they belong to that hive. The result matches, byte for byte, what Windows itself produces when it loads the same hive.
 
 ### Linux
 
@@ -103,7 +114,7 @@ Every `.evtx` in a folder is parsed and filtered by provider and event id, so re
 
 ### Disk images
 
-E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or flat; Hyper-V VHD and VHDX, fixed or dynamic) are read in place, without converting or mounting. MBR and GPT partition tables, NTFS traversal, BitLocker detection. From the live volume and from **every Volume Shadow Copy**: event logs, `config` hives with their transaction logs, `Amcache.hve`, `NTUSER.DAT` and `UsrClass.dat` of every profile. Shadow copies are read with [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs), pure Rust, straight from the image.
+E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or flat; Hyper-V VHD and VHDX, fixed or dynamic) are read in place, without converting or mounting. MBR and GPT partition tables, NTFS traversal, BitLocker detection. From the live volume and from **every Volume Shadow Copy**: event logs, `config` hives with their transaction logs, `Amcache.hve`, `NTUSER.DAT` and `UsrClass.dat` of every profile, Prefetch, task XML, WER reports, Defender logs, PCA logs and the PowerShell history of every profile. Shadow copies are read with [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs), pure Rust, straight from the image.
 
 ---
 
@@ -132,7 +143,7 @@ caarea [OPTIONS] --output <PATH>
   -d, --directory <PATH>      Evidence directory or triage folder (repeatable)
   -f, --file <PATH>           Disk image, archive or single artifact (repeatable)
   -o, --output <PATH>         Destination CSV
-  -m, --modules <MODULES>     evtx | registry | linux | all          [default: all]
+  -m, --modules <MODULES>     evtx | registry | windows | linux | all   [default: all]
   -t, --toi <TIMESTAMP>       Centre of a time window of interest (ISO-8601)
   -w, --toi-window <HOURS>    Hours before and after the TOI       [default: 24]
       --start-time <TS>       Keep events from this time on

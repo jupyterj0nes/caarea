@@ -55,8 +55,20 @@ pub fn is_relevant_artifact(entry_name: &str) -> bool {
         return false;
     }
 
-    // EVTX logs
-    if file_name.ends_with(".evtx") {
+    // EVTX logs and Prefetch files
+    if file_name.ends_with(".evtx") || file_name.ends_with(".pf") {
+        return true;
+    }
+
+    // Windows file artifacts: PowerShell history, WER reports, Defender logs, PCA logs,
+    // scheduled task definitions (extension-less files under a Tasks folder)
+    if file_name == "consolehost_history.txt"
+        || file_name == "report.wer"
+        || ((file_name.starts_with("mplog-") || file_name.starts_with("mpdetection-")) && file_name.ends_with(".log"))
+        || file_name == "pcaapplaunchdic.txt"
+        || (file_name.starts_with("pcageneraldb") && file_name.ends_with(".txt"))
+        || (lower.contains("/tasks/") && !file_name.contains('.'))
+    {
         return true;
     }
 

@@ -14,6 +14,7 @@ use walkdir::WalkDir;
 
 use crate::ingest::archive::{inspect_triage_archive, is_supported_archive, unpack_archive_recursive};
 use crate::ingest::image::{is_supported_image, unpack_disk_image};
+use crate::provenance::Provenance;
 
 /// Logs a message with Caarea branding and a human-readable timestamp
 fn log_message(silent: bool, message: &str) {
@@ -29,9 +30,9 @@ pub struct EvidenceWorkspace {
     pub files: Vec<String>,
     /// Hostname hints learnt during ingestion (triage package names), keyed by extracted directory
     pub hostnames: HashMap<String, String>,
-    /// Provenance tags for directories that are not the live evidence (Volume Shadow Copies),
-    /// keyed by extracted directory, e.g. `vss:2026-09-04T08:12:53Z`
-    pub origins: HashMap<String, String>,
+    /// Provenance of directories that are not the live evidence (Volume Shadow Copies,
+    /// recovered or carved material), keyed by extracted directory
+    pub origins: HashMap<String, Provenance>,
     temp_dir: Option<PathBuf>,
 }
 
@@ -41,9 +42,9 @@ impl EvidenceWorkspace {
         self.hostnames.get(dir).map(|s| s.as_str())
     }
 
-    /// Provenance tag for a directory (shadow copy), if any
-    pub fn origin_tag(&self, dir: &str) -> Option<&str> {
-        self.origins.get(dir).map(|s| s.as_str())
+    /// Provenance of a directory (shadow copy, recovered, carved), if it is not live evidence
+    pub fn origin(&self, dir: &str) -> Option<&Provenance> {
+        self.origins.get(dir)
     }
 }
 
@@ -74,7 +75,7 @@ pub fn prepare_evidence(
     let mut directories = Vec::new();
     let mut files = Vec::new();
     let mut hostnames: HashMap<String, String> = HashMap::new();
-    let mut origins: HashMap<String, String> = HashMap::new();
+    let mut origins: HashMap<String, Provenance> = HashMap::new();
     let mut archives_to_extract = Vec::new();
     let mut images_to_extract = Vec::new();
 
