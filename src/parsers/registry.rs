@@ -660,7 +660,7 @@ pub fn process_registry_target(target: &Path, silent: bool) -> Result<Vec<Event>
             })
             .collect();
 
-        pb.finish_with_message("Registry processing complete");
+        pb.finish_and_clear();
         all_events = processed.into_iter().flatten().collect();
     } else if target.is_file() {
         all_events = parse_registry_file(target, silent)?;

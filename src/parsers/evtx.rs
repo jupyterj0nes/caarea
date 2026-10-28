@@ -9,7 +9,7 @@ use chrono::Local;
 use indicatif::{ProgressBar, ProgressStyle}; // Barra de progreso
 
 /// List of important EVTX files to process (can be expanded later)
-pub const TARGET_EVTX_FILES: [&str; 1] = ["Security.evtx"];
+pub const TARGET_EVTX_FILES: [&str; 4] = ["Security.evtx", "System.evtx", "Windows PowerShell.evtx", "Microsoft-Windows-PowerShell%4Operational.evtx"];
 
 /// Structure for an extracted event
 #[derive(Debug, Clone)]
@@ -72,7 +72,7 @@ pub fn process_evtx_target(target: &Path, silent: bool) -> Result<Vec<Event>, Bo
             })
             .collect();
 
-        pb.finish_with_message("Processing complete");
+        pb.finish_and_clear();
 
         all_events = processed_events.into_iter().flatten().collect();
     } else if target.is_file() {
@@ -176,8 +176,19 @@ pub fn parse_evtx(file_path: &str) -> Result<Vec<Event>, Box<dyn Error>> {
 fn extract_event_4688(json_str: &str) -> Option<Event> {
     let parsed: Value = serde_json::from_str(json_str).ok()?;
     
-    let event_id = parsed["Event"]["System"]["EventID"].as_u64().unwrap_or(0);
-    if event_id != 4688 {
+    
+    let event_id_val = &parsed["Event"]["System"]["EventID"];
+    let event_id = if let Some(obj) = event_id_val.as_object() {
+        if let Some(text_val) = obj.get("#text") {
+            text_val.as_u64().or_else(|| text_val.as_str().and_then(|s| s.parse::<u64>().ok())).unwrap_or(0)
+        } else {
+            0
+        }
+    } else {
+        event_id_val.as_u64().or_else(|| event_id_val.as_str().and_then(|s| s.parse::<u64>().ok())).unwrap_or(0)
+    };
+
+    if event_id != 4688 && event_id != 7045 && event_id != 400 {
         return None;
     }
 
@@ -191,7 +202,8 @@ fn extract_event_4688(json_str: &str) -> Option<Event> {
         .unwrap_or("Unknown Computer")
         .to_string();
 
-    let eventdata = &parsed["Event"]["EventData"];
+    let mut eventdata = &parsed["Event"]["EventData"];
+    if eventdata.is_null() { eventdata = &parsed["Event"]["UserData"]["EventXML"]; }
 
     let mut subject_username = String::new();
     let mut target_username = String::new();
@@ -204,20 +216,34 @@ fn extract_event_4688(json_str: &str) -> Option<Event> {
         for (key, value) in event_obj.iter() {
             let value_str = value.as_str().unwrap_or("").to_string();
 
-            match key.as_str() {
+                        match key.as_str() {
                 "SubjectUserName" => subject_username = value_str,
                 "SubjectDomainName" => {
-                    subject_username = format!("{}\\{}", value_str, subject_username);
+                    subject_username = format!("{}{}", value_str, subject_username);
                 }
                 "TargetUserName" => target_username = value_str,
                 "TargetDomainName" => {
-                    target_username = format!("{}\\{}", value_str, target_username);
+                    target_username = format!("{}{}", value_str, target_username);
                 }
-                "NewProcessName" => processname = value_str,
-                "CommandLine" => commandline = Some(value_str),
+                "NewProcessName" => processname = value_str.clone(),
+                "CommandLine" => commandline = Some(value_str.clone()),
                 "ParentProcessName" => parentprocessname = value_str,
                 "ProcessId" => {
                     pid = u32::from_str_radix(value_str.trim_start_matches("0x"), 16).unwrap_or(0);
+                }
+                // EVTX 7045 (Service Install) mapping
+                "ServiceName" => processname = value_str.clone(),
+                "ImagePath" => commandline = Some(value_str.clone()),
+                "ServiceAccount" => subject_username = value_str,
+                // EVTX 400 (PowerShell) mapping
+                "HostVersion" => processname = format!("PowerShell v{}", value_str),
+                "HostApplication" => commandline = Some(value_str.clone()),
+                // EVTX 4697 (Security Service Install) mapping
+                "ServiceFileName" => commandline = Some(value_str.clone()),
+                // EVTX 4104 (PowerShell Script Block)
+                "ScriptBlockText" => {
+                    processname = "PowerShell Script Block".to_string();
+                    commandline = Some(value_str.clone());
                 }
                 _ => {}
             }
@@ -227,7 +253,7 @@ fn extract_event_4688(json_str: &str) -> Option<Event> {
     Some(Event {
         timestamp,
         computer,
-        artifact: "evtx:4688".to_string(),
+        artifact: format!("evtx:{}!", event_id).replace("!", ""),
         event_id,
         pid,
         subject_username,

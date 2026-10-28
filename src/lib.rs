@@ -141,6 +141,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     let pre_filter_count = all_events.len();
 
+    // Deduplicate events across shadow copies
+    all_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.event_id.cmp(&b.event_id)));
+    all_events.dedup_by(|a, b| a.timestamp == b.timestamp && a.event_id == b.event_id && a.artifact == b.artifact && a.processname == b.processname);
+
     // Apply Time of Interest (TOI) filter if requested
     let filtered_events = utils::filter_by_toi(all_events, start_time, end_time);
     if start_time.is_some() || end_time.is_some() {
