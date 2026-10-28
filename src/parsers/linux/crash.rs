@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use crate::utils::systemtime_to_iso;
 use regex::Regex;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
@@ -17,11 +17,8 @@ pub fn parse_segfault_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
     let fallback_timestamp = fs::metadata(file_path)
         .ok()
         .and_then(|m| m.modified().ok())
-        .map(|st| {
-            let dt: DateTime<Utc> = st.into();
-            dt.to_rfc3339()
-        })
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string());
+        .map(systemtime_to_iso)
+        .unwrap_or_else(|| "1970-01-01T00:00:00.000000Z".to_string());
 
     // Matches: "binary[1234]: segfault at 7fff1234 ip ... sp ... error 4 in binary[...]"
     let segfault_re = match Regex::new(

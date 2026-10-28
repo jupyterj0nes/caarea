@@ -187,9 +187,9 @@ pub fn extract_triage_hostname(archive_path: &str, kind: TriageType) -> Option<S
         }
         TriageType::Kape | TriageType::CyLROrLive | TriageType::Generic => {
             // Typical: <hostname>_<YYYYMMDD>_<HHMMSS>.zip
-            let mut parts = stem.splitn(2, '_');
-            let head = parts.next()?;
-            let tail = parts.next()?;
+            let (head, tail) = stem.split_once('_')?;
+            
+            
             let tail_starts_with_digits = tail.chars().take(4).all(|c| c.is_ascii_digit());
             if tail_starts_with_digits && !head.is_empty() {
                 Some(head.to_string())

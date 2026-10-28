@@ -1,13 +1,16 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use crate::parsers::evtx::Event;
+use crate::parsers::linux::timezone::HostTimezone;
+use crate::utils::iso_utc;
 
-/// Parses live_response/process/ps_-axo_pid_user_lstart_args.txt from UAC or live response
-pub fn parse_ps_lstart_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
+/// Parses live_response/process/ps_-axo_pid_user_lstart_args.txt from UAC or live response.
+/// `lstart` is printed in the host's local time, converted with the detected host time zone.
+pub fn parse_ps_lstart_file(file_path: &Path, computer_name: &str, tz: &HostTimezone) -> Vec<Event> {
     let mut events = Vec::new();
     let file = match File::open(file_path) {
         Ok(f) => f,
@@ -45,7 +48,7 @@ pub fn parse_ps_lstart_file(file_path: &Path, computer_name: &str) -> Vec<Event>
             let iso_timestamp = match NaiveDateTime::parse_from_str(started_str, "%a %b %e %H:%M:%S %Y")
                 .or_else(|_| NaiveDateTime::parse_from_str(started_str, "%a %b %d %H:%M:%S %Y"))
             {
-                Ok(ndt) => DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc).to_rfc3339(),
+                Ok(ndt) => iso_utc(&tz.local_to_utc(ndt)),
                 Err(_) => continue,
             };
 
@@ -91,7 +94,7 @@ mod tests {
             writeln!(f, "10615 anita    Sat Sep 26 00:14:52 2026 /bin/sh ./uac full /tmp/out").unwrap();
         }
 
-        let events = parse_ps_lstart_file(&temp_file, "TESTHOST");
+        let events = parse_ps_lstart_file(&temp_file, "TESTHOST", &HostTimezone::utc());
         let _ = std::fs::remove_file(&temp_file);
 
         assert_eq!(events.len(), 3);

@@ -1,6 +1,25 @@
+//! Windows registry transaction log replayer (in memory, evidence files are never modified).
+//!
+//! Implements the recovery rules of the registry file format specification
+//! (<https://github.com/msuhanov/regf>):
+//!
+//! * New format (`HvLE` log entries, Windows 8.1+): every entry is authenticated with two
+//!   Marvin32 hashes; entries are applied in strictly consecutive sequence order starting at the
+//!   primary sequence number of the log file's own base block; both `.LOG1` / `.LOG2` are used,
+//!   the one with the earlier entries first; a clean hive is never touched.
+//! * Old format (`DIRT` dirty vector, up to Windows 8): a log is valid when its own sequence
+//!   numbers match and applicable when its "last written" timestamp equals the hive's.
+
 use chrono::Local;
+use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// Seed used by Windows for Hash-1 / Hash-2 of `HvLE` entries (bytes 82 EF 4D 88 7A 4E 55 C5).
+pub const MARVIN32_SEED: u64 = 0x82EF_4D88_7A4E_55C5;
+const HVLE_HEADER_LEN: usize = 40;
+const SECTOR: usize = 512;
+const PRIMARY_BASE_BLOCK_LEN: usize = 4096;
 
 /// Logs a message with Caarea branding and a human-readable timestamp
 fn log_message(silent: bool, message: &str) {
@@ -10,6 +29,50 @@ fn log_message(silent: bool, message: &str) {
     }
 }
 
+// -------------------------------------------------------------------------------------------------
+// Marvin32 (verified against real NTUSER.DAT.LOG1/.LOG2 entries written by Windows 11)
+// -------------------------------------------------------------------------------------------------
+
+#[inline]
+fn marvin_block(p0: &mut u32, p1: &mut u32) {
+    *p1 ^= *p0;
+    *p0 = p0.rotate_left(20);
+    *p0 = p0.wrapping_add(*p1);
+    *p1 = p1.rotate_left(9);
+    *p1 ^= *p0;
+    *p0 = p0.rotate_left(27);
+    *p0 = p0.wrapping_add(*p1);
+    *p1 = p1.rotate_left(19);
+}
+
+/// Microsoft Marvin32 checksum. Returns `(p1 << 32) | p0`, the layout Windows stores on disk.
+pub fn marvin32(seed: u64, data: &[u8]) -> u64 {
+    let mut p0 = seed as u32;
+    let mut p1 = (seed >> 32) as u32;
+
+    let mut chunks = data.chunks_exact(4);
+    for c in &mut chunks {
+        p0 = p0.wrapping_add(u32::from_le_bytes([c[0], c[1], c[2], c[3]]));
+        marvin_block(&mut p0, &mut p1);
+    }
+    let rem = chunks.remainder();
+    let fin: u32 = match rem.len() {
+        0 => 0x80,
+        1 => 0x8000 | rem[0] as u32,
+        2 => 0x80_0000 | rem[0] as u32 | (rem[1] as u32) << 8,
+        _ => 0x8000_0000 | rem[0] as u32 | (rem[1] as u32) << 8 | (rem[2] as u32) << 16,
+    };
+    p0 = p0.wrapping_add(fin);
+    marvin_block(&mut p0, &mut p1);
+    marvin_block(&mut p0, &mut p1);
+
+    ((p1 as u64) << 32) | p0 as u64
+}
+
+// -------------------------------------------------------------------------------------------------
+// Data structures
+// -------------------------------------------------------------------------------------------------
+
 /// Represents a single dirty page reference and its corresponding data
 #[derive(Debug, Clone)]
 struct DirtyPage {
@@ -17,22 +80,44 @@ struct DirtyPage {
     data: Vec<u8>,
 }
 
-/// Represents a parsed HvLE log entry
+/// Represents a parsed, hash-verified HvLE log entry
 #[derive(Debug, Clone)]
-struct HvLeEntry {
-    sequence_number: u32,
-    hive_bins_data_size: usize,
+pub struct HvLeEntry {
+    pub sequence_number: u32,
+    pub hive_bins_data_size: usize,
     dirty_pages: Vec<DirtyPage>,
+}
+
+/// Fields of a `regf` base block that drive recovery decisions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BaseBlockInfo {
+    pub primary_seq: u32,
+    pub secondary_seq: u32,
+    pub last_written: u64,
+    pub hive_bins_size: u32,
+}
+
+/// Reads the base block of a primary or log file (`None` when the `regf` signature is missing).
+pub fn base_block_info(data: &[u8]) -> Option<BaseBlockInfo> {
+    if data.len() < 0x2C || &data[0..4] != b"regf" {
+        return None;
+    }
+    let u32_at = |o: usize| u32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
+    let mut lw = [0u8; 8];
+    lw.copy_from_slice(&data[12..20]);
+    Some(BaseBlockInfo {
+        primary_seq: u32_at(4),
+        secondary_seq: u32_at(8),
+        last_written: u64::from_le_bytes(lw),
+        hive_bins_size: u32_at(0x28),
+    })
 }
 
 /// Checks if a hive buffer is marked as "dirty" (primary != secondary sequence number)
 pub fn is_hive_dirty(hive_data: &[u8]) -> bool {
-    if hive_data.len() < 12 {
-        return false;
-    }
-    let primary_seq = u32::from_le_bytes([hive_data[4], hive_data[5], hive_data[6], hive_data[7]]);
-    let secondary_seq = u32::from_le_bytes([hive_data[8], hive_data[9], hive_data[10], hive_data[11]]);
-    primary_seq != secondary_seq
+    base_block_info(hive_data)
+        .map(|b| b.primary_seq != b.secondary_seq)
+        .unwrap_or(false)
 }
 
 /// Finds adjacent transaction log files (.LOG, .LOG1, .LOG2) for a given hive file path
@@ -60,8 +145,11 @@ pub fn find_associated_logs(hive_path: &Path) -> Vec<PathBuf> {
 
     for candidate in &candidates {
         let log_path = parent.join(candidate);
-        if log_path.exists() && log_path.is_file() {
-            if !logs.contains(&log_path) {
+        if log_path.is_file() {
+            let already = logs.iter().any(|p: &PathBuf| {
+                p.to_string_lossy().eq_ignore_ascii_case(&log_path.to_string_lossy())
+            });
+            if !already {
                 logs.push(log_path);
             }
         }
@@ -70,192 +158,259 @@ pub fn find_associated_logs(hive_path: &Path) -> Vec<PathBuf> {
     logs
 }
 
-/// Replays transaction logs into a primary registry hive buffer.
-/// Returns the updated in-memory hive buffer (original files on disk are never altered).
-pub fn replay_hive_logs(hive_path: &Path, hive_data: &[u8], silent: bool) -> Vec<u8> {
-    let dirty = is_hive_dirty(hive_data);
-    let log_files = find_associated_logs(hive_path);
-
-    if log_files.is_empty() {
-        return hive_data.to_vec();
-    }
-
-    let primary_seq = if hive_data.len() >= 8 {
-        u32::from_le_bytes([hive_data[4], hive_data[5], hive_data[6], hive_data[7]])
-    } else {
-        0
-    };
-
-    let secondary_seq = if hive_data.len() >= 12 {
-        u32::from_le_bytes([hive_data[8], hive_data[9], hive_data[10], hive_data[11]])
-    } else {
-        0
-    };
-
-    let min_seq = primary_seq.min(secondary_seq);
-
-    // Read and parse all candidate log entries from all associated log files
-    let mut all_hvle_entries: Vec<HvLeEntry> = Vec::new();
-    let mut total_dirt_pages = 0;
-
-    for log_path in &log_files {
-        if let Ok(log_data) = fs::read(log_path) {
-            // Try parsing new format (HvLE)
-            let hvle_entries = parse_hvle_log(&log_data);
-            if !hvle_entries.is_empty() {
-                all_hvle_entries.extend(hvle_entries);
-            } else {
-                // Try legacy DIRT format
-                let dirt_pages = parse_dirt_log(&log_data);
-                if !dirt_pages.is_empty() {
-                    total_dirt_pages += dirt_pages.len();
-                }
-            }
-        }
-    }
-
-    // Filter and sort HvLE entries by sequence number
-    all_hvle_entries.retain(|e| e.sequence_number >= min_seq);
-    all_hvle_entries.sort_by_key(|e| e.sequence_number);
-    all_hvle_entries.dedup_by_key(|e| e.sequence_number);
-
-    if all_hvle_entries.is_empty() && total_dirt_pages == 0 {
-        return hive_data.to_vec();
-    }
-
-    log_message(
-        silent,
-        &format!(
-            "🔄 Replaying transaction logs for {}: found {} log files, applying {} HvLE entries (dirty hive: {})",
-            hive_path.display(),
-            log_files.len(),
-            all_hvle_entries.len(),
-            dirty
-        ),
-    );
-
-    let mut recovered_buffer = hive_data.to_vec();
-    let mut last_seq = primary_seq;
-    let mut pages_applied = 0;
-
-    // Apply HvLE entries
-    for entry in all_hvle_entries {
-        last_seq = entry.sequence_number;
-
-        // Ensure buffer can accommodate hive bins data size
-        let target_size = 4096 + entry.hive_bins_data_size;
-        if recovered_buffer.len() < target_size {
-            recovered_buffer.resize(target_size, 0);
-        }
-
-        for page in entry.dirty_pages {
-            let write_offset = 4096 + page.offset_in_bins;
-            let end_offset = write_offset + page.data.len();
-
-            if recovered_buffer.len() < end_offset {
-                recovered_buffer.resize(end_offset, 0);
-            }
-
-            recovered_buffer[write_offset..end_offset].copy_from_slice(&page.data);
-            pages_applied += 1;
-        }
-    }
-
-    // Apply legacy DIRT pages if any
-    for log_path in &log_files {
-        if let Ok(log_data) = fs::read(log_path) {
-            let dirt_pages = parse_dirt_log(&log_data);
-            for page in dirt_pages {
-                let write_offset = 4096 + page.offset_in_bins;
-                let end_offset = write_offset + page.data.len();
-                if recovered_buffer.len() < end_offset {
-                    recovered_buffer.resize(end_offset, 0);
-                }
-                recovered_buffer[write_offset..end_offset].copy_from_slice(&page.data);
-                pages_applied += 1;
-            }
-        }
-    }
-
-    // Update base block sequence numbers to mark hive as clean and synchronized
-    if recovered_buffer.len() >= 12 {
-        let seq_bytes = last_seq.to_le_bytes();
-        recovered_buffer[4..8].copy_from_slice(&seq_bytes);
-        recovered_buffer[8..12].copy_from_slice(&seq_bytes);
-    }
-
-    log_message(
-        silent,
-        &format!(
-            "✅ Replay complete for {}: applied {} dirty pages (synchronized sequence: {})",
-            hive_path.display(),
-            pages_applied,
-            last_seq
-        ),
-    );
-
-    recovered_buffer
+/// A transaction log file after parsing
+struct ParsedLog {
+    path: PathBuf,
+    info: BaseBlockInfo,
+    hvle: Vec<HvLeEntry>,
+    hvle_rejected: usize,
+    dirt: Vec<DirtyPage>,
 }
 
-/// Parses an incremental transaction log file (New format, HvLE)
-fn parse_hvle_log(data: &[u8]) -> Vec<HvLeEntry> {
+/// Recomputes the base block checksum (XOR of the first 508 bytes as little-endian u32 words).
+fn fix_base_block_checksum(buf: &mut [u8]) {
+    if buf.len() < 0x200 {
+        return;
+    }
+    let mut x: u32 = 0;
+    for w in buf[..0x1FC].chunks_exact(4) {
+        x ^= u32::from_le_bytes([w[0], w[1], w[2], w[3]]);
+    }
+    let checksum = match x {
+        0 => 1,
+        0xFFFF_FFFF => 0xFFFF_FFFE,
+        v => v,
+    };
+    buf[0x1FC..0x200].copy_from_slice(&checksum.to_le_bytes());
+}
+
+fn apply_pages(buffer: &mut Vec<u8>, pages: &[DirtyPage]) -> usize {
+    let mut applied = 0;
+    for page in pages {
+        let write_offset = PRIMARY_BASE_BLOCK_LEN + page.offset_in_bins;
+        let end_offset = write_offset + page.data.len();
+        if buffer.len() < end_offset {
+            buffer.resize(end_offset, 0);
+        }
+        buffer[write_offset..end_offset].copy_from_slice(&page.data);
+        applied += 1;
+    }
+    applied
+}
+
+/// Replays transaction logs into a primary registry hive buffer.
+/// Returns the hive unchanged (borrowed, no copy) when nothing has to be applied, or a new
+/// in-memory buffer with the recovered data. Files on disk are never altered.
+pub fn replay_hive_logs<'a>(hive_path: &Path, hive_data: &'a [u8], silent: bool) -> Cow<'a, [u8]> {
+    let hive_info = match base_block_info(hive_data) {
+        Some(i) => i,
+        None => return Cow::Borrowed(hive_data),
+    };
+
+    // A clean hive is consistent by definition: log entries left behind are ignored (spec).
+    if hive_info.primary_seq == hive_info.secondary_seq {
+        return Cow::Borrowed(hive_data);
+    }
+
+    let log_files = find_associated_logs(hive_path);
+    if log_files.is_empty() {
+        log_message(
+            silent,
+            &format!("⚠️ Hive {} is dirty but no transaction log (.LOG1/.LOG2) is present next to it", hive_path.display()),
+        );
+        return Cow::Borrowed(hive_data);
+    }
+
+    let mut logs: Vec<ParsedLog> = Vec::new();
+    for log_path in &log_files {
+        let log_data = match fs::read(log_path) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let info = match base_block_info(&log_data) {
+            Some(i) => i,
+            None => continue,
+        };
+        let (hvle, hvle_rejected) = parse_hvle_log(&log_data);
+        let dirt = if hvle.is_empty() && hvle_rejected == 0 { parse_dirt_log(&log_data) } else { Vec::new() };
+        logs.push(ParsedLog { path: log_path.clone(), info, hvle, hvle_rejected, dirt });
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // New format (HvLE)
+    // ---------------------------------------------------------------------------------------------
+    let mut new_logs: Vec<&ParsedLog> = logs.iter().filter(|l| !l.hvle.is_empty()).collect();
+    if !new_logs.is_empty() {
+        // Logs written before the last successful flush of the primary file are stale.
+        new_logs.retain(|l| l.info.primary_seq >= hive_info.secondary_seq);
+        new_logs.sort_by_key(|l| l.info.primary_seq);
+
+        let rejected: usize = logs.iter().map(|l| l.hvle_rejected).sum();
+        let mut buffer = hive_data.to_vec();
+        let mut expected = match new_logs.first() {
+            Some(l) => l.info.primary_seq.max(hive_info.primary_seq),
+            None => return Cow::Borrowed(hive_data),
+        };
+        let mut applied_entries = 0usize;
+        let mut applied_pages = 0usize;
+        let mut last_seq = hive_info.primary_seq;
+        let mut last_bins_size: Option<usize> = None;
+        let mut gap = false;
+
+        'outer: for log in &new_logs {
+            for entry in &log.hvle {
+                if entry.sequence_number < expected {
+                    continue; // already contained in the primary file
+                }
+                if entry.sequence_number > expected {
+                    gap = true;
+                    break 'outer; // missing entry: everything after it is unreliable
+                }
+                applied_pages += apply_pages(&mut buffer, &entry.dirty_pages);
+                applied_entries += 1;
+                last_seq = entry.sequence_number;
+                last_bins_size = Some(entry.hive_bins_data_size);
+                expected += 1;
+            }
+        }
+
+        if applied_entries == 0 {
+            log_message(
+                silent,
+                &format!(
+                    "⚠️ Hive {} is dirty but its logs hold no applicable HvLE entries (expected sequence {}, {} rejected by hash)",
+                    hive_path.display(),
+                    expected,
+                    rejected
+                ),
+            );
+            return Cow::Borrowed(hive_data);
+        }
+
+        if let Some(size) = last_bins_size {
+            let needed = PRIMARY_BASE_BLOCK_LEN + size;
+            if buffer.len() < needed {
+                buffer.resize(needed, 0);
+            }
+            buffer[0x28..0x2C].copy_from_slice(&(size as u32).to_le_bytes());
+        }
+        let seq_bytes = last_seq.to_le_bytes();
+        buffer[4..8].copy_from_slice(&seq_bytes);
+        buffer[8..12].copy_from_slice(&seq_bytes);
+        fix_base_block_checksum(&mut buffer);
+
+        log_message(
+            silent,
+            &format!(
+                "🔄 Replayed {} HvLE log entr{} ({} dirty pages) from {} log file(s) into {} (sequence {} → {}){}{}",
+                applied_entries,
+                if applied_entries == 1 { "y" } else { "ies" },
+                applied_pages,
+                new_logs.len(),
+                hive_path.display(),
+                hive_info.primary_seq,
+                last_seq,
+                if gap { ", stopped at a sequence gap" } else { "" },
+                if rejected > 0 { format!(", {} entr(y/ies) rejected by hash", rejected) } else { String::new() }
+            ),
+        );
+        return Cow::Owned(buffer);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Old format (DIRT): first valid & applicable log wins (.LOG / .LOG1 are tried before .LOG2)
+    // ---------------------------------------------------------------------------------------------
+    for log in logs.iter().filter(|l| !l.dirt.is_empty()) {
+        let valid = log.info.primary_seq == log.info.secondary_seq;
+        let applicable = log.info.last_written == hive_info.last_written;
+        if !valid || !applicable {
+            log_message(
+                silent,
+                &format!(
+                    "⚠️ Skipping old-format log {}: {}",
+                    log.path.display(),
+                    if !valid { "inconsistent sequence numbers" } else { "last-written timestamp does not match the hive" }
+                ),
+            );
+            continue;
+        }
+        let mut buffer = hive_data.to_vec();
+        let applied_pages = apply_pages(&mut buffer, &log.dirt);
+        let seq_bytes = log.info.primary_seq.to_le_bytes();
+        buffer[4..8].copy_from_slice(&seq_bytes);
+        buffer[8..12].copy_from_slice(&seq_bytes);
+        fix_base_block_checksum(&mut buffer);
+        log_message(
+            silent,
+            &format!(
+                "🔄 Replayed {} dirty pages (old DIRT format) from {} into {}",
+                applied_pages,
+                log.path.display(),
+                hive_path.display()
+            ),
+        );
+        return Cow::Owned(buffer);
+    }
+
+    log_message(
+        silent,
+        &format!("⚠️ Hive {} is dirty but no usable transaction log data was found", hive_path.display()),
+    );
+    Cow::Borrowed(hive_data)
+}
+
+/// Parses an incremental transaction log file (new format, `HvLE`).
+/// Returns the verified entries in file order and the number of entries rejected because
+/// their Marvin32 hashes did not match (parsing stops at the first invalid entry).
+fn parse_hvle_log(data: &[u8]) -> (Vec<HvLeEntry>, usize) {
     let mut entries = Vec::new();
+    let mut rejected = 0;
 
     // The first sector (512 bytes) is the base block
-    if data.len() < 1024 {
-        return entries;
+    if data.len() < 2 * SECTOR || &data[0..4] != b"regf" {
+        return (entries, rejected);
     }
 
-    // Verify file header starts with "regf"
-    if &data[0..4] != b"regf" {
-        return entries;
-    }
+    let u32_at = |o: usize| u32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
+    let u64_at = |o: usize| {
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&data[o..o + 8]);
+        u64::from_le_bytes(b)
+    };
 
-    let mut offset = 512; // Log entries start at second sector
+    let mut offset = SECTOR; // Log entries start at the second sector
 
-    while offset + 40 <= data.len() {
+    while offset + HVLE_HEADER_LEN <= data.len() {
         if &data[offset..offset + 4] != b"HvLE" {
-            // Not a valid entry at this 512-byte boundary
+            break; // not a valid entry at this 512-byte boundary: end of log
+        }
+
+        let entry_size = u32_at(offset + 4) as usize;
+        if entry_size < HVLE_HEADER_LEN || offset + entry_size > data.len() {
+            rejected += 1;
             break;
         }
 
-        let entry_size = u32::from_le_bytes([
-            data[offset + 4],
-            data[offset + 5],
-            data[offset + 6],
-            data[offset + 7],
-        ]) as usize;
+        let sequence_number = u32_at(offset + 12);
+        let hive_bins_data_size = u32_at(offset + 16) as usize;
+        let dirty_pages_count = u32_at(offset + 20) as usize;
+        let stored_hash1 = u64_at(offset + 24);
+        let stored_hash2 = u64_at(offset + 32);
 
-        if entry_size < 40 || offset + entry_size > data.len() {
+        // Hash-2 covers the first 32 bytes of the entry; Hash-1 covers everything after the header.
+        let hash2 = marvin32(MARVIN32_SEED, &data[offset..offset + 32]);
+        let hash1 = marvin32(MARVIN32_SEED, &data[offset + HVLE_HEADER_LEN..offset + entry_size]);
+        if hash1 != stored_hash1 || hash2 != stored_hash2 {
+            rejected += 1;
             break;
         }
 
-        let sequence_number = u32::from_le_bytes([
-            data[offset + 12],
-            data[offset + 13],
-            data[offset + 14],
-            data[offset + 15],
-        ]);
-
-        let hive_bins_data_size = u32::from_le_bytes([
-            data[offset + 16],
-            data[offset + 17],
-            data[offset + 18],
-            data[offset + 19],
-        ]) as usize;
-
-        let dirty_pages_count = u32::from_le_bytes([
-            data[offset + 20],
-            data[offset + 21],
-            data[offset + 22],
-            data[offset + 23],
-        ]) as usize;
-
-        let refs_offset = offset + 40;
+        let refs_offset = offset + HVLE_HEADER_LEN;
         let refs_total_size = dirty_pages_count * 8;
         let mut raw_data_offset = refs_offset + refs_total_size;
 
         if raw_data_offset > offset + entry_size {
+            rejected += 1;
             break;
         }
 
@@ -264,19 +419,8 @@ fn parse_hvle_log(data: &[u8]) -> Vec<HvLeEntry> {
 
         for i in 0..dirty_pages_count {
             let ref_ptr = refs_offset + (i * 8);
-            let page_offset = u32::from_le_bytes([
-                data[ref_ptr],
-                data[ref_ptr + 1],
-                data[ref_ptr + 2],
-                data[ref_ptr + 3],
-            ]) as usize;
-
-            let page_size = u32::from_le_bytes([
-                data[ref_ptr + 4],
-                data[ref_ptr + 5],
-                data[ref_ptr + 6],
-                data[ref_ptr + 7],
-            ]) as usize;
+            let page_offset = u32_at(ref_ptr) as usize;
+            let page_size = u32_at(ref_ptr + 4) as usize;
 
             if raw_data_offset + page_size > offset + entry_size {
                 valid = false;
@@ -291,51 +435,50 @@ fn parse_hvle_log(data: &[u8]) -> Vec<HvLeEntry> {
             raw_data_offset += page_size;
         }
 
-        if valid {
-            entries.push(HvLeEntry {
-                sequence_number,
-                hive_bins_data_size,
-                dirty_pages,
-            });
+        if !valid {
+            rejected += 1;
+            break;
         }
 
+        entries.push(HvLeEntry {
+            sequence_number,
+            hive_bins_data_size,
+            dirty_pages,
+        });
+
         // Align next entry offset to 512-byte boundary
-        offset = (offset + entry_size + 511) & !511;
+        offset = (offset + entry_size + SECTOR - 1) & !(SECTOR - 1);
     }
 
-    entries
+    (entries, rejected)
 }
 
-/// Parses a legacy transaction log file (Old format, DIRT)
+/// Parses a legacy transaction log file (old format, `DIRT` dirty vector)
 fn parse_dirt_log(data: &[u8]) -> Vec<DirtyPage> {
     let mut pages = Vec::new();
 
-    if data.len() < 1024 || &data[0..4] != b"regf" {
+    if data.len() < 2 * SECTOR + 4 || &data[0..4] != b"regf" {
         return pages;
     }
 
-    // Check for "DIRT" signature at offset 512
-    if &data[512..516] != b"DIRT" {
+    // "DIRT" signature at the beginning of the second sector
+    if &data[SECTOR..SECTOR + 4] != b"DIRT" {
         return pages;
     }
 
-    let hive_bins_size = if data.len() >= 0x2C {
-        u32::from_le_bytes([data[0x28], data[0x29], data[0x2A], data[0x2B]]) as usize
-    } else {
-        0
-    };
+    let hive_bins_size = u32::from_le_bytes([data[0x28], data[0x29], data[0x2A], data[0x2B]]) as usize;
 
-    let total_pages = hive_bins_size / 512;
-    let bitmap_bytes_len = (total_pages + 7) / 8;
-    let bitmap_start = 516;
+    let total_pages = hive_bins_size / SECTOR;
+    let bitmap_bytes_len = total_pages.div_ceil(8);
+    let bitmap_start = SECTOR + 4;
     let bitmap_end = bitmap_start + bitmap_bytes_len;
 
     if bitmap_end > data.len() {
         return pages;
     }
 
-    // Dirty pages start at next 512-byte aligned sector after dirty vector
-    let pages_data_start = (bitmap_end + 511) & !511;
+    // Dirty pages start at the sector following the last sector of the dirty vector
+    let pages_data_start = (bitmap_end + SECTOR - 1) & !(SECTOR - 1);
     let mut current_page_offset = pages_data_start;
 
     for bit_index in 0..total_pages {
@@ -347,12 +490,12 @@ fn parse_dirt_log(data: &[u8]) -> Vec<DirtyPage> {
         }
 
         if (data[byte_pos] & (1 << bit_pos)) != 0 {
-            if current_page_offset + 512 <= data.len() {
+            if current_page_offset + SECTOR <= data.len() {
                 pages.push(DirtyPage {
-                    offset_in_bins: bit_index * 512,
-                    data: data[current_page_offset..current_page_offset + 512].to_vec(),
+                    offset_in_bins: bit_index * SECTOR,
+                    data: data[current_page_offset..current_page_offset + SECTOR].to_vec(),
                 });
-                current_page_offset += 512;
+                current_page_offset += SECTOR;
             } else {
                 break;
             }
@@ -366,58 +509,204 @@ fn parse_dirt_log(data: &[u8]) -> Vec<DirtyPage> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_is_hive_dirty() {
-        let mut clean_hive = vec![0u8; 4096];
-        clean_hive[..4].copy_from_slice(b"regf");
-        clean_hive[4..8].copy_from_slice(&100u32.to_le_bytes());
-        clean_hive[8..12].copy_from_slice(&100u32.to_le_bytes());
-        assert!(!is_hive_dirty(&clean_hive));
+    fn base_block(primary: u32, secondary: u32, hbins: u32) -> Vec<u8> {
+        let mut b = vec![0u8; 4096];
+        b[..4].copy_from_slice(b"regf");
+        b[4..8].copy_from_slice(&primary.to_le_bytes());
+        b[8..12].copy_from_slice(&secondary.to_le_bytes());
+        b[0x28..0x2C].copy_from_slice(&hbins.to_le_bytes());
+        b
+    }
 
-        let mut dirty_hive = clean_hive.clone();
-        dirty_hive[8..12].copy_from_slice(&99u32.to_le_bytes());
-        assert!(is_hive_dirty(&dirty_hive));
+    /// Builds one HvLE entry (with valid hashes) at `offset` inside `log`.
+    fn write_hvle_entry(log: &mut Vec<u8>, offset: usize, seq: u32, bins_size: u32, pages: &[(u32, &[u8])]) -> usize {
+        let refs = pages.len() * 8;
+        let data_len: usize = pages.iter().map(|(_, d)| d.len()).sum();
+        let entry_size = HVLE_HEADER_LEN + refs + data_len;
+        let padded = (entry_size + SECTOR - 1) & !(SECTOR - 1);
+        if log.len() < offset + padded {
+            log.resize(offset + padded, 0);
+        }
+        log[offset..offset + 4].copy_from_slice(b"HvLE");
+        log[offset + 4..offset + 8].copy_from_slice(&(padded as u32).to_le_bytes());
+        log[offset + 12..offset + 16].copy_from_slice(&seq.to_le_bytes());
+        log[offset + 16..offset + 20].copy_from_slice(&bins_size.to_le_bytes());
+        log[offset + 20..offset + 24].copy_from_slice(&(pages.len() as u32).to_le_bytes());
+        let mut rp = offset + HVLE_HEADER_LEN;
+        let mut dp = offset + HVLE_HEADER_LEN + refs;
+        for (page_off, data) in pages {
+            log[rp..rp + 4].copy_from_slice(&page_off.to_le_bytes());
+            log[rp + 4..rp + 8].copy_from_slice(&(data.len() as u32).to_le_bytes());
+            log[dp..dp + data.len()].copy_from_slice(data);
+            rp += 8;
+            dp += data.len();
+        }
+        let h1 = marvin32(MARVIN32_SEED, &log[offset + HVLE_HEADER_LEN..offset + padded]);
+        log[offset + 24..offset + 32].copy_from_slice(&h1.to_le_bytes());
+        let h2 = marvin32(MARVIN32_SEED, &log[offset..offset + 32]);
+        log[offset + 32..offset + 40].copy_from_slice(&h2.to_le_bytes());
+        offset + padded
     }
 
     #[test]
-    fn test_hvle_entry_replay() {
-        // Create base hive with sequence 10
-        let mut base_hive = vec![0u8; 8192];
-        base_hive[..4].copy_from_slice(b"regf");
-        base_hive[4..8].copy_from_slice(&10u32.to_le_bytes());
-        base_hive[8..12].copy_from_slice(&9u32.to_le_bytes()); // dirty: 10 != 9
+    fn test_is_hive_dirty() {
+        let clean = base_block(100, 100, 4096);
+        assert!(!is_hive_dirty(&clean));
+        let mut dirty = clean.clone();
+        dirty[8..12].copy_from_slice(&99u32.to_le_bytes());
+        assert!(is_hive_dirty(&dirty));
+        assert!(!is_hive_dirty(b"not a hive"));
+    }
 
-        // Construct synthetic HvLE log file
-        let mut log_data = vec![0u8; 2048];
-        log_data[..4].copy_from_slice(b"regf");
+    #[test]
+    fn test_marvin32_is_deterministic_and_length_sensitive() {
+        let a = marvin32(MARVIN32_SEED, b"abc");
+        let b = marvin32(MARVIN32_SEED, b"abc");
+        let c = marvin32(MARVIN32_SEED, b"abcd");
+        let d = marvin32(MARVIN32_SEED, b"");
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+        assert_ne!(a, d);
+        assert_ne!(marvin32(0, b"abc"), a);
+    }
 
-        let entry_offset = 512;
-        log_data[entry_offset..entry_offset + 4].copy_from_slice(b"HvLE");
+    #[test]
+    fn test_hvle_entries_are_hash_verified_and_replayed_in_order() {
+        let mut log = base_block(10, 10, 4096);
+        log.truncate(SECTOR); // log files have a 512-byte base block
+        let page_a = b"CAAREA_FORENSIC_RECOVERED_PAGE_DATA";
+        let page_b = b"SECOND_ENTRY";
+        let next = write_hvle_entry(&mut log, SECTOR, 10, 4096, &[(0x20, page_a)]);
+        let next = write_hvle_entry(&mut log, next, 11, 4096, &[(0x100, page_b)]);
+        // A corrupted (torn) third entry must be rejected and must not stop the first two.
+        let end = write_hvle_entry(&mut log, next, 12, 4096, &[(0x200, b"GARBAGE")]);
+        log[next + 50] ^= 0xFF;
+        assert!(end > next);
 
-        let dirty_page_content = b"CAAREA_FORENSIC_RECOVERED_PAGE_DATA";
-        let page_size = dirty_page_content.len() as u32;
-        let entry_size = 40 + 8 + page_size;
-        let entry_size_padded = (entry_size + 511) & !511;
+        let (entries, rejected) = parse_hvle_log(&log);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(rejected, 1);
+        assert_eq!(entries[0].sequence_number, 10);
+        assert_eq!(entries[0].dirty_pages[0].offset_in_bins, 0x20);
+        assert_eq!(entries[0].dirty_pages[0].data, page_a);
 
-        log_data[entry_offset + 4..entry_offset + 8].copy_from_slice(&entry_size_padded.to_le_bytes());
-        log_data[entry_offset + 12..entry_offset + 16].copy_from_slice(&10u32.to_le_bytes()); // seq 10
-        log_data[entry_offset + 16..entry_offset + 20].copy_from_slice(&4096u32.to_le_bytes()); // bins size 4096
-        log_data[entry_offset + 20..entry_offset + 24].copy_from_slice(&1u32.to_le_bytes()); // 1 dirty page
+        // Replay into a dirty hive (primary 10 / secondary 9) located next to the log
+        let dir = std::env::temp_dir().join(format!("caarea_txlog_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let hive_path = dir.join("NTUSER.DAT");
+        let mut hive = base_block(10, 9, 4096);
+        hive.resize(8192, 0);
+        std::fs::write(&hive_path, &hive).unwrap();
+        std::fs::write(dir.join("NTUSER.DAT.LOG1"), &log).unwrap();
 
-        // Dirty page reference: offset 0x20 in hive bins, size `page_size`
-        let ref_offset = entry_offset + 40;
-        log_data[ref_offset..ref_offset + 4].copy_from_slice(&0x20u32.to_le_bytes());
-        log_data[ref_offset + 4..ref_offset + 8].copy_from_slice(&page_size.to_le_bytes());
+        let recovered = replay_hive_logs(&hive_path, &hive, true);
+        let _ = std::fs::remove_dir_all(&dir);
 
-        // Dirty page data
-        let data_offset = ref_offset + 8;
-        log_data[data_offset..data_offset + dirty_page_content.len()].copy_from_slice(dirty_page_content);
+        assert!(matches!(recovered, Cow::Owned(_)));
+        assert_eq!(&recovered[4096 + 0x20..4096 + 0x20 + page_a.len()], page_a);
+        assert_eq!(&recovered[4096 + 0x100..4096 + 0x100 + page_b.len()], page_b);
+        assert_eq!(base_block_info(&recovered).unwrap().primary_seq, 11);
+        assert_eq!(base_block_info(&recovered).unwrap().secondary_seq, 11);
+    }
 
-        let parsed = parse_hvle_log(&log_data);
-        assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].sequence_number, 10);
-        assert_eq!(parsed[0].dirty_pages.len(), 1);
-        assert_eq!(parsed[0].dirty_pages[0].offset_in_bins, 0x20);
-        assert_eq!(parsed[0].dirty_pages[0].data, dirty_page_content);
+    #[test]
+    fn test_clean_hive_is_left_untouched_and_stale_logs_are_ignored() {
+        let dir = std::env::temp_dir().join(format!("caarea_txlog_clean_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let hive_path = dir.join("SYSTEM");
+        let mut hive = base_block(44, 44, 4096);
+        hive.resize(8192, 0);
+        std::fs::write(&hive_path, &hive).unwrap();
+        let mut log = base_block(43, 43, 4096);
+        log.truncate(SECTOR);
+        write_hvle_entry(&mut log, SECTOR, 43, 4096, &[(0x20, b"STALE")]);
+        std::fs::write(dir.join("SYSTEM.LOG1"), &log).unwrap();
+
+        let recovered = replay_hive_logs(&hive_path, &hive, true);
+        assert!(matches!(recovered, Cow::Borrowed(_)));
+
+        // Dirty hive (45/44) but the only log is older than the last flush: nothing applicable
+        hive[4..8].copy_from_slice(&45u32.to_le_bytes());
+        std::fs::write(&hive_path, &hive).unwrap();
+        let recovered2 = replay_hive_logs(&hive_path, &hive, true);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(matches!(recovered2, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_old_dirt_log_requires_matching_timestamp() {
+        let dir = std::env::temp_dir().join(format!("caarea_txlog_dirt_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let hive_path = dir.join("SOFTWARE");
+        let mut hive = base_block(7, 6, 1024);
+        hive[12..20].copy_from_slice(&0x1122_3344_5566_7788u64.to_le_bytes());
+        hive.resize(4096 + 1024, 0);
+        std::fs::write(&hive_path, &hive).unwrap();
+
+        // Log: base block (seq 7/7, same timestamp), DIRT vector marking page 1, one page of data
+        let mut log = base_block(7, 7, 1024);
+        log[12..20].copy_from_slice(&0x1122_3344_5566_7788u64.to_le_bytes());
+        log.truncate(SECTOR);
+        log.extend_from_slice(b"DIRT");
+        log.push(0b0000_0010); // page index 1 dirty
+        log.resize(2 * SECTOR, 0); // pad to the next sector
+        let mut page = vec![0xABu8; SECTOR];
+        page[..5].copy_from_slice(b"DIRTY");
+        log.extend_from_slice(&page);
+        std::fs::write(dir.join("SOFTWARE.LOG1"), &log).unwrap();
+
+        let recovered = replay_hive_logs(&hive_path, &hive, true);
+        assert!(matches!(recovered, Cow::Owned(_)));
+        assert_eq!(&recovered[4096 + 512..4096 + 517], b"DIRTY");
+
+        // Same log but a different "last written" timestamp in the hive: must be skipped
+        hive[12..20].copy_from_slice(&0x9999u64.to_le_bytes());
+        std::fs::write(&hive_path, &hive).unwrap();
+        let recovered2 = replay_hive_logs(&hive_path, &hive, true);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(matches!(recovered2, Cow::Borrowed(_)));
+    }
+
+    /// Ground-truth check against the yarp test corpus when it is available locally:
+    /// `CAAREA_YARP_HIVES=<dir with NewDirtyHive1/, OldDirtyHive/>`.
+    #[test]
+    fn test_recovery_matches_yarp_reference_hives() {
+        let root = match std::env::var("CAAREA_YARP_HIVES") {
+            Ok(r) => PathBuf::from(r),
+            Err(_) => return,
+        };
+        let cases = [
+            ("NewDirtyHive1/NewDirtyHive", "NewDirtyHive1/RecoveredHive_Windows10"),
+            ("OldDirtyHive/OldDirtyHive", "OldDirtyHive/RecoveredHive_Windows7"),
+        ];
+        for (dirty, reference) in cases {
+            let dirty_path = root.join(dirty);
+            let dirty_data = std::fs::read(&dirty_path).expect("dirty hive fixture");
+            let reference_data = std::fs::read(root.join(reference)).expect("reference fixture");
+            assert!(is_hive_dirty(&dirty_data), "{} should be dirty", dirty);
+            let recovered = replay_hive_logs(&dirty_path, &dirty_data, true);
+            assert!(matches!(recovered, Cow::Owned(_)), "{}: nothing was replayed", dirty);
+            let bins = base_block_info(&recovered).unwrap().hive_bins_size as usize;
+            let n = (4096 + bins).min(recovered.len()).min(reference_data.len());
+            assert!(n > 4096, "{}: recovered buffer too small", dirty);
+            // Windows refreshes the timestamp stored in the first hbin header (bytes 20..28 of
+            // the hbin) when it writes the recovered hive; that field carries no cell data.
+            let first_hbin_ts = 4096 + 20..4096 + 28;
+            let diffs: Vec<usize> = (4096..n)
+                .filter(|i| !first_hbin_ts.contains(i))
+                .filter(|&i| recovered[i] != reference_data[i])
+                .collect();
+            // The old-format reference was produced by Windows 7 *loading* the recovered hive,
+            // which also refreshes cached nk fields ("largest value name length"): one byte in
+            // 1,109 corrected bytes. The new-format reference must match exactly.
+            let tolerance = if dirty.starts_with("Old") { 4 } else { 0 };
+            assert!(
+                diffs.len() <= tolerance,
+                "{}: {} byte(s) of recovered hive bins differ from the Windows-recovered reference, first at {:#x}",
+                dirty,
+                diffs.len(),
+                diffs[0]
+            );
+        }
     }
 }

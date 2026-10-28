@@ -4,6 +4,8 @@ use std::io::{self, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use vshadow::VssVolume;
 
+use crate::utils::filetime_to_iso;
+
 const NTFS_SIGNATURE: &[u8] = b"NTFS    ";
 const BITLOCKER_SIGNATURE: &[u8] = b"-FVE-FS-";
 
@@ -11,6 +13,7 @@ const BITLOCKER_SIGNATURE: &[u8] = b"-FVE-FS-";
 const EVTX_LOGS_PATH: &[&str] = &["Windows", "System32", "winevt", "Logs"];
 const REG_CONFIG_PATH: &[&str] = &["Windows", "System32", "config"];
 const AMCACHE_PATH: &[&str] = &["Windows", "AppCompat", "Programs"];
+const USRCLASS_PATH: &[&str] = &["AppData", "Local", "Microsoft", "Windows"];
 
 /// GPT partition type GUID for Microsoft Basic Data (includes NTFS)
 const GPT_BASIC_DATA_GUID: [u8; 16] = [
@@ -91,7 +94,7 @@ fn verify_ntfs_signature<R: Read + Seek>(reader: &mut R, offset: u64) -> bool {
     if reader.read_exact(&mut sig).is_err() {
         return false;
     }
-    &sig == NTFS_SIGNATURE
+    sig == NTFS_SIGNATURE
 }
 
 /// Verifies whether a partition is BitLocker encrypted
@@ -103,7 +106,7 @@ fn verify_bitlocker_signature<R: Read + Seek>(reader: &mut R, offset: u64) -> bo
     if reader.read_exact(&mut sig).is_err() {
         return false;
     }
-    &sig == BITLOCKER_SIGNATURE
+    sig == BITLOCKER_SIGNATURE
 }
 
 /// Locates NTFS partitions by parsing MBR, GPT, and checking common volume offsets
@@ -168,18 +171,17 @@ fn find_ntfs_partitions<R: Read + Seek>(reader: &mut R, image_size: u64) -> Resu
     // Common fallback offsets (raw volume, 1MB alignment, 2048 sectors)
     if partitions.is_empty() {
         for &offset in &[0u64, 1024 * 1024, 2048 * 512, 63 * 512] {
-            if offset < image_size && verify_ntfs_signature(reader, offset) {
-                if !partitions.contains(&offset) {
+            if offset < image_size && verify_ntfs_signature(reader, offset)
+                && !partitions.contains(&offset) {
                     partitions.push(offset);
                 }
-            }
         }
     }
 
     Ok(partitions)
 }
 
-/// Extracts execution artifacts (EVTX, Registry, Amcache, Users) from an NTFS partition
+/// Extracts execution artifacts (EVTX, Registry, Amcache, Users) from an NTFS partition of a disk
 fn extract_artifacts_from_ntfs<R: Read + Seek>(
     reader: &mut R,
     partition_offset: u64,
@@ -187,41 +189,48 @@ fn extract_artifacts_from_ntfs<R: Read + Seek>(
     part_idx: usize,
 ) -> Result<usize, String> {
     let mut part_reader = OffsetReader::new(reader, partition_offset);
-
-    let mut ntfs = ntfs::Ntfs::new(&mut part_reader).map_err(|e| format!("Cannot parse NTFS: {}", e))?;
-    ntfs.read_upcase_table(&mut part_reader).map_err(|e| format!("Cannot read upcase table: {}", e))?;
-
-    let root_dir = ntfs.root_directory(&mut part_reader).map_err(|e| format!("Cannot read root directory: {}", e))?;
-
     let part_dir = output_dir.join(format!("partition_{}", part_idx));
-    fs::create_dir_all(&part_dir).map_err(|e| e.to_string())?;
+    extract_artifacts_from_volume(&mut part_reader, &part_dir)
+}
+
+/// Extracts execution artifacts (EVTX, Registry, Amcache, Users) from a volume-relative NTFS
+/// reader: a partition of the live disk, or a Volume Shadow Copy view of it.
+fn extract_artifacts_from_volume<R: Read + Seek>(volume: &mut R, part_dir: &Path) -> Result<usize, String> {
+    let mut ntfs = ntfs::Ntfs::new(volume).map_err(|e| format!("Cannot parse NTFS: {}", e))?;
+    ntfs.read_upcase_table(volume).map_err(|e| format!("Cannot read upcase table: {}", e))?;
+
+    let root_dir = ntfs.root_directory(volume).map_err(|e| format!("Cannot read root directory: {}", e))?;
+
+    fs::create_dir_all(part_dir).map_err(|e| e.to_string())?;
 
     let mut total_extracted = 0;
 
     // 1. Extract Windows EVTX logs (Windows\System32\winevt\Logs)
-    if let Ok(evtx_dir) = navigate_to_path(&ntfs, &root_dir, &mut part_reader, EVTX_LOGS_PATH) {
-        if let Ok(count) = dump_files_matching(&ntfs, &evtx_dir, &mut part_reader, &part_dir.join("Logs"), ".evtx") {
+    if let Ok(evtx_dir) = navigate_to_path(&ntfs, &root_dir, volume, EVTX_LOGS_PATH) {
+        if let Ok(count) = dump_files_matching(&ntfs, &evtx_dir, volume, &part_dir.join("Logs"), ".evtx") {
             total_extracted += count;
         }
     }
 
     // 2. Extract System Registry hives (Windows\System32\config: SYSTEM, SOFTWARE, SAM, SECURITY, and .LOG1/.LOG2)
-    if let Ok(config_dir) = navigate_to_path(&ntfs, &root_dir, &mut part_reader, REG_CONFIG_PATH) {
-        if let Ok(count) = dump_registry_config_files(&ntfs, &config_dir, &mut part_reader, &part_dir.join("config")) {
+    if let Ok(config_dir) = navigate_to_path(&ntfs, &root_dir, volume, REG_CONFIG_PATH) {
+        if let Ok(count) = dump_registry_config_files(&ntfs, &config_dir, volume, &part_dir.join("config")) {
             total_extracted += count;
         }
     }
 
-    // 3. Extract Amcache.hve (Windows\AppCompat\Programs\Amcache.hve)
-    if let Ok(amcache_dir) = navigate_to_path(&ntfs, &root_dir, &mut part_reader, AMCACHE_PATH) {
-        if let Ok(count) = dump_files_matching(&ntfs, &amcache_dir, &mut part_reader, &part_dir.join("AppCompat"), ".hve") {
-            total_extracted += count;
+    // 3. Extract Amcache.hve and its transaction logs (Windows\AppCompat\Programs\Amcache.hve[.LOG1/.LOG2])
+    if let Ok(amcache_dir) = navigate_to_path(&ntfs, &root_dir, volume, AMCACHE_PATH) {
+        for suffix in [".hve", ".hve.log1", ".hve.log2"] {
+            if let Ok(count) = dump_files_matching(&ntfs, &amcache_dir, volume, &part_dir.join("AppCompat"), suffix) {
+                total_extracted += count;
+            }
         }
     }
 
     // 4. Extract User hives (Users\<username>\NTUSER.DAT and UsrClass.dat)
-    if let Ok(users_dir) = navigate_to_path(&ntfs, &root_dir, &mut part_reader, &["Users"]) {
-        if let Ok(count) = dump_user_hives(&ntfs, &users_dir, &mut part_reader, &part_dir.join("Users")) {
+    if let Ok(users_dir) = navigate_to_path(&ntfs, &root_dir, volume, &["Users"]) {
+        if let Ok(count) = dump_user_hives(&ntfs, &users_dir, volume, &part_dir.join("Users")) {
             total_extracted += count;
         }
     }
@@ -356,28 +365,49 @@ fn dump_user_hives<R: Read + Seek>(
 
     for (username, u_ref) in user_dirs {
         if let Ok(user_dir) = u_ref.to_file(ntfs, reader) {
-            if let Ok(u_index) = user_dir.directory_index(reader) {
-                let mut u_entries = u_index.entries();
-                while let Some(Ok(entry)) = u_entries.next(reader) {
-                    if let Some(Ok(key)) = entry.key() {
-                        let fname = key.name().to_string_lossy().to_string();
-                        let upper = fname.to_uppercase();
+            // NTUSER.DAT (+ .LOG1 / .LOG2) in the profile root
+            count += dump_named_hives(ntfs, &user_dir, reader, dest, &username, "NTUSER.DAT");
 
-                        if upper.starts_with("NTUSER.DAT") {
-                            let out_name = format!("{}_{}", username, fname);
-                            if let Ok(file) = entry.file_reference().to_file(ntfs, reader) {
-                                if dump_ntfs_file_data(&file, reader, &dest.join(&out_name)).is_ok() {
-                                    count += 1;
-                                }
-                            }
-                        }
-                    }
-                }
+            // UsrClass.dat (+ .LOG1 / .LOG2) in AppData\Local\Microsoft\Windows
+            if let Ok(classes_dir) = navigate_to_path(ntfs, &user_dir, reader, USRCLASS_PATH) {
+                count += dump_named_hives(ntfs, &classes_dir, reader, dest, &username, "USRCLASS.DAT");
             }
         }
     }
 
     Ok(count)
+}
+
+/// Dumps every file in `dir` whose upper-cased name starts with `prefix` (hive + transaction logs)
+/// as `<username>_<original name>` into `dest`.
+fn dump_named_hives<R: Read + Seek>(
+    ntfs: &ntfs::Ntfs,
+    dir: &ntfs::NtfsFile,
+    reader: &mut R,
+    dest: &Path,
+    username: &str,
+    prefix: &str,
+) -> usize {
+    let mut count = 0;
+    let index = match dir.directory_index(reader) {
+        Ok(i) => i,
+        Err(_) => return 0,
+    };
+    let mut entries = index.entries();
+    while let Some(Ok(entry)) = entries.next(reader) {
+        if let Some(Ok(key)) = entry.key() {
+            let fname = key.name().to_string_lossy().to_string();
+            if fname.to_uppercase().starts_with(prefix) {
+                let out_name = format!("{}_{}", username, fname);
+                if let Ok(file) = entry.file_reference().to_file(ntfs, reader) {
+                    if dump_ntfs_file_data(&file, reader, &dest.join(&out_name)).is_ok() {
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+    count
 }
 
 /// Dumps raw data stream of an NTFS file to an output file path
@@ -387,8 +417,8 @@ fn dump_ntfs_file_data<R: Read + Seek>(file: &ntfs::NtfsFile, reader: &mut R, ou
         _ => return Err(io::Error::new(io::ErrorKind::NotFound, "No data attribute")),
     };
 
-    let data_attr = data_item.to_attribute().map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-    let data_val = data_attr.value(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let data_attr = data_item.to_attribute().map_err(|e| io::Error::other(e.to_string()))?;
+    let data_val = data_attr.value(reader).map_err(|e| io::Error::other(e.to_string()))?;
     let mut attached = data_val.attach(reader);
 
     let mut out_file = File::create(out_path)?;
@@ -405,22 +435,32 @@ fn dump_ntfs_file_data<R: Read + Seek>(file: &ntfs::NtfsFile, reader: &mut R, ou
     Ok(())
 }
 
+/// Result of staging a disk image: the live volume artifacts plus one directory per Volume
+/// Shadow Copy, each tagged with the snapshot creation time (`vss:2026-09-04T08:12:53Z`).
+#[derive(Debug, Clone)]
+pub struct ImageExtraction {
+    pub live_dir: PathBuf,
+    pub shadow_dirs: Vec<(PathBuf, String)>,
+}
+
 /// Unpacks forensic execution artifacts from an E01 or RAW disk image into a destination staging directory
 pub fn unpack_disk_image(
     image_path: &Path,
     dest_staging: &Path,
     silent: bool,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+) -> Result<ImageExtraction, Box<dyn std::error::Error>> {
     let stem = image_path.file_stem().and_then(|s| s.to_str()).unwrap_or("disk_image");
     let out_dir = dest_staging.join(stem);
-    fs::create_dir_all(&out_dir)?;
+    let live_dir = out_dir.join("live");
+    let vss_root = out_dir.join("vss");
+    fs::create_dir_all(&live_dir)?;
 
     let path_str = image_path.to_string_lossy().to_string();
     let lower = path_str.to_lowercase();
 
     log_message(silent, &format!("💿 Opening forensic disk image: {}", image_path.display()));
 
-    if lower.ends_with(".e01") || lower.ends_with(".ex01") {
+    let shadow_dirs = if lower.ends_with(".e01") || lower.ends_with(".ex01") {
         let ewf_reader = ewf::EwfReader::open(&path_str).map_err(|e| format!("Failed to open E01 image: {}", e))?;
         let total_size = ewf_reader.total_size();
         log_message(
@@ -429,7 +469,7 @@ pub fn unpack_disk_image(
         );
 
         let mut buf_reader = BufReader::new(ewf_reader);
-        process_seekable_image(&mut buf_reader, total_size, &out_dir, silent)?;
+        process_seekable_image(&mut buf_reader, total_size, &live_dir, &vss_root, silent)?
     } else {
         let file = File::open(image_path)?;
         let total_size = file.metadata()?.len();
@@ -439,19 +479,21 @@ pub fn unpack_disk_image(
         );
 
         let mut buf_reader = BufReader::new(file);
-        process_seekable_image(&mut buf_reader, total_size, &out_dir, silent)?;
-    }
+        process_seekable_image(&mut buf_reader, total_size, &live_dir, &vss_root, silent)?
+    };
 
-    Ok(out_dir)
+    Ok(ImageExtraction { live_dir, shadow_dirs })
 }
 
-/// Processes seekable disk image reader: locates partitions, extracts artifacts and Volume Shadow Copies
+/// Processes a seekable disk image: locates partitions, extracts artifacts from the live volume
+/// and from every Volume Shadow Copy store. Returns the shadow copy directories with their tags.
 fn process_seekable_image<R: Read + Seek>(
     reader: &mut R,
     image_size: u64,
-    out_dir: &Path,
+    live_dir: &Path,
+    vss_root: &Path,
     silent: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<(PathBuf, String)>, Box<dyn std::error::Error>> {
     let partitions = find_ntfs_partitions(reader, image_size).map_err(|e| format!("Partition scan error: {}", e))?;
 
     if partitions.is_empty() {
@@ -464,6 +506,7 @@ fn process_seekable_image<R: Read + Seek>(
     );
 
     let mut total_extracted = 0;
+    let mut shadow_dirs: Vec<(PathBuf, String)> = Vec::new();
 
     for (idx, &part_offset) in partitions.iter().enumerate() {
         if verify_bitlocker_signature(reader, part_offset) {
@@ -474,7 +517,7 @@ fn process_seekable_image<R: Read + Seek>(
             continue;
         }
 
-        match extract_artifacts_from_ntfs(reader, part_offset, out_dir, idx) {
+        match extract_artifacts_from_ntfs(reader, part_offset, live_dir, idx) {
             Ok(count) => {
                 total_extracted += count;
                 log_message(
@@ -490,22 +533,57 @@ fn process_seekable_image<R: Read + Seek>(
             }
         }
 
-        // Check for Volume Shadow Copies (VSS)
+        // Volume Shadow Copies: every store is a full historical view of the volume. Artifacts
+        // deleted or rotated since the snapshot (cleared EVTX, old hive values) come back from here.
         let mut part_reader = OffsetReader::new(reader, part_offset);
-        if let Ok(vss) = VssVolume::new(&mut part_reader) {
-            if vss.store_count() > 0 {
-                log_message(
-                    silent,
-                    &format!("  ├─ Detected {} Volume Shadow Copy (VSS) store(s) on Partition {}", vss.store_count(), idx + 1),
-                );
+        let vss = match VssVolume::new(&mut part_reader) {
+            Ok(v) if v.store_count() > 0 => v,
+            _ => continue,
+        };
+        log_message(
+            silent,
+            &format!("  ├─ Partition {}: {} Volume Shadow Copy store(s) detected, extracting each snapshot...", idx + 1, vss.store_count()),
+        );
+
+        for s in 0..vss.store_count() {
+            let created_iso = vss
+                .store_info(s)
+                .ok()
+                .and_then(|info| filetime_to_iso(info.creation_time))
+                .map(|iso| format!("{}Z", &iso[..19]))
+                .unwrap_or_else(|| format!("store{}", s));
+            let compact: String = created_iso.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+            let store_dir = vss_root.join(format!("partition_{}", idx)).join(format!("vss{:02}_{}", s, compact));
+
+            match vss.store_reader(&mut part_reader, s) {
+                Ok(mut store_reader) => match extract_artifacts_from_volume(&mut store_reader, &store_dir) {
+                    Ok(count) => {
+                        total_extracted += count;
+                        log_message(
+                            silent,
+                            &format!("  │   ├─ VSS store {} (created {}): extracted {} artifacts", s, created_iso, count),
+                        );
+                        shadow_dirs.push((store_dir, format!("vss:{}", created_iso)));
+                    }
+                    Err(e) => {
+                        log_message(silent, &format!("  │   ⚠️ VSS store {} (created {}): {}", s, created_iso, e));
+                    }
+                },
+                Err(e) => {
+                    log_message(silent, &format!("  │   ⚠️ Cannot open VSS store {}: {}", s, e));
+                }
             }
         }
     }
 
     log_message(
         silent,
-        &format!("  └─ Disk image extraction completed. Total staged artifacts: {}", total_extracted),
+        &format!(
+            "  └─ Disk image extraction completed. Total staged artifacts: {} ({} shadow copies)",
+            total_extracted,
+            shadow_dirs.len()
+        ),
     );
 
-    Ok(())
+    Ok(shadow_dirs)
 }

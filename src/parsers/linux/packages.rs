@@ -1,9 +1,11 @@
-use chrono::DateTime;
+use chrono::NaiveDateTime;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use crate::parsers::evtx::Event;
+use crate::parsers::linux::timezone::HostTimezone;
+use crate::utils::{epoch_to_iso, iso_utc};
 
 /// Parses UAC RPM install time query file (live_response/packages/rpm_-q_-a_--queryformat_installtime_name_version_release.txt)
 pub fn parse_rpm_query_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
@@ -28,8 +30,8 @@ pub fn parse_rpm_query_file(file_path: &Path, computer_name: &str) -> Vec<Event>
                 let name = parts[1];
                 let version = parts[2];
 
-                let iso_ts = match DateTime::from_timestamp(epoch, 0) {
-                    Some(dt) => dt.to_rfc3339(),
+                let iso_ts = match epoch_to_iso(epoch, 0) {
+                    Some(ts) => ts,
                     None => continue,
                 };
 
@@ -52,8 +54,9 @@ pub fn parse_rpm_query_file(file_path: &Path, computer_name: &str) -> Vec<Event>
     events
 }
 
-/// Parses /var/log/dpkg.log for software installation events
-pub fn parse_dpkg_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
+/// Parses /var/log/dpkg.log for software installation events. dpkg writes host wall-clock
+/// times, converted here with the detected host time zone.
+pub fn parse_dpkg_log(file_path: &Path, computer_name: &str, tz: &HostTimezone) -> Vec<Event> {
     let mut events = Vec::new();
     let file = match File::open(file_path) {
         Ok(f) => f,
@@ -77,7 +80,10 @@ pub fn parse_dpkg_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
                 let pkg_name = parts[4];
                 let pkg_version = parts[5];
 
-                let iso_ts = format!("{}T{}Z", date_str, time_str);
+                let iso_ts = match NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%Y-%m-%d %H:%M:%S") {
+                    Ok(ndt) => iso_utc(&tz.local_to_utc(ndt)),
+                    Err(_) => continue,
+                };
 
                 events.push(Event {
                     timestamp: iso_ts,

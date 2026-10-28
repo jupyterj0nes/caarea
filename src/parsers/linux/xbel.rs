@@ -6,6 +6,7 @@ use std::path::Path;
 
 use crate::parsers::evtx::Event;
 use crate::parsers::linux::histories::infer_user_from_history_path;
+use crate::utils::normalize_iso;
 
 /// Parses ~/.local/share/recently-used.xbel files (Gnome, KDE, XFCE recently opened files)
 pub fn parse_xbel_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
@@ -35,16 +36,14 @@ pub fn parse_xbel_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
                     current_added.clear();
                     current_modified.clear();
 
-                    for attr_res in e.attributes() {
-                        if let Ok(attr) = attr_res {
-                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            match key.as_str() {
-                                "href" => current_href = val,
-                                "added" => current_added = val,
-                                "modified" => current_modified = val,
-                                _ => {}
-                            }
+                    for attr in e.attributes().flatten() {
+                        let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                        let val = String::from_utf8_lossy(&attr.value).to_string();
+                        match key.as_str() {
+                            "href" => current_href = val,
+                            "added" => current_added = val,
+                            "modified" => current_modified = val,
+                            _ => {}
                         }
                     }
                 } else if name == "bookmark:application" {
@@ -52,16 +51,14 @@ pub fn parse_xbel_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
                     let mut app_exec = String::new();
                     let mut app_modified = String::new();
 
-                    for attr_res in e.attributes() {
-                        if let Ok(attr) = attr_res {
-                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            match key.as_str() {
-                                "name" => app_name = val,
-                                "exec" => app_exec = val,
-                                "modified" => app_modified = val,
-                                _ => {}
-                            }
+                    for attr in e.attributes().flatten() {
+                        let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                        let val = String::from_utf8_lossy(&attr.value).to_string();
+                        match key.as_str() {
+                            "name" => app_name = val,
+                            "exec" => app_exec = val,
+                            "modified" => app_modified = val,
+                            _ => {}
                         }
                     }
 
@@ -83,7 +80,7 @@ pub fn parse_xbel_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
                         let clean_path = current_href.strip_prefix("file://").unwrap_or(&current_href);
 
                         events.push(Event {
-                            timestamp: ts,
+                            timestamp: normalize_iso(&ts).unwrap_or(ts),
                             computer: computer_name.to_string(),
                             artifact: "linux:gui:recently_used".to_string(),
                             event_id: 0,
@@ -138,6 +135,6 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].processname, "Document Viewer");
         assert!(events[0].commandline.as_ref().unwrap().contains("secret_report.pdf"));
-        assert_eq!(events[0].timestamp, "2026-09-24T10:05:00Z");
+        assert_eq!(events[0].timestamp, "2026-09-24T10:05:00.000000Z");
     }
 }

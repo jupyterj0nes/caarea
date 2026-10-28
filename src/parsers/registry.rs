@@ -52,8 +52,44 @@ fn infer_user_from_path(path: &Path) -> Option<String> {
     None
 }
 
+/// True for the SYSTEM hive (also in reconstructed names such as `HOST_SYSTEM`)
+fn is_system_hive_name(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_uppercase())
+        .unwrap_or_default();
+    name == "SYSTEM" || name.ends_with("_SYSTEM") || name.ends_with("-SYSTEM")
+}
+
+/// Reads the computer name stored in a SYSTEM hive, if any
+pub fn detect_computer_name(path: &Path) -> Option<String> {
+    let raw = fs::read(path).ok()?;
+    if !is_registry_hive(&raw) {
+        return None;
+    }
+    let data = crate::parsers::tx_log::replay_hive_logs(path, &raw, true);
+    let hive = Hive::parse(&data[..]).ok()?;
+    let identity = system::identity(&hive);
+    identity
+        .entries
+        .first()
+        .and_then(|id| id.computer_name.as_ref().map(|c| c.name.clone()))
+        .filter(|n| !n.trim().is_empty())
+}
+
 /// Parses an offline Windows Registry hive file and extracts forensic execution artifacts
 pub fn parse_registry_file(file_path: &Path, silent: bool) -> Result<Vec<Event>, Box<dyn Error>> {
+    parse_registry_file_with_defaults(file_path, silent, None)
+}
+
+/// Same as [`parse_registry_file`] with a fallback computer name for hives that do not carry
+/// one themselves (NTUSER.DAT, UsrClass.dat, SOFTWARE, Amcache.hve), typically taken from the
+/// SYSTEM hive collected alongside.
+pub fn parse_registry_file_with_defaults(
+    file_path: &Path,
+    silent: bool,
+    default_computer: Option<&str>,
+) -> Result<Vec<Event>, Box<dyn Error>> {
     let raw_data = fs::read(file_path)?;
     if !is_registry_hive(&raw_data) {
         return Ok(vec![]);
@@ -62,14 +98,14 @@ pub fn parse_registry_file(file_path: &Path, silent: bool) -> Result<Vec<Event>,
     // 🔄 Automatically detect and replay transaction logs (.LOG, .LOG1, .LOG2) in memory
     let data = crate::parsers::tx_log::replay_hive_logs(file_path, &raw_data, silent);
 
-    let hive = Hive::parse(&data).map_err(|e| format!("Failed to parse registry hive: {}", e))?;
+    let hive = Hive::parse(&data[..]).map_err(|e| format!("Failed to parse registry hive: {}", e))?;
     let mut events = Vec::new();
 
     // Determine computer name and user SID mappings from SYSTEM / SOFTWARE identity if available
     let identity_found = system::identity(&hive);
     let id_opt = identity_found.entries.first();
 
-    let mut computer_name = "Unknown".to_string();
+    let mut computer_name = default_computer.unwrap_or("Unknown").to_string();
     let mut sid_to_user: HashMap<String, String> = HashMap::new();
 
     if let Some(id) = id_opt {
@@ -252,38 +288,45 @@ pub fn parse_registry_file(file_path: &Path, silent: bool) -> Result<Vec<Event>,
     // ==========================================
     // 4. UserAssist (NTUSER.DAT)
     // ==========================================
-    let user_name = user_from_filename.clone().unwrap_or_else(|| "User".to_string());
+    let is_user_hive = file_path
+        .file_name()
+        .map(|n| {
+            let l = n.to_string_lossy().to_lowercase();
+            l.contains("ntuser") || l.contains("usrclass")
+        })
+        .unwrap_or(false);
+    let user_name = user_from_filename
+        .clone()
+        .unwrap_or_else(|| if is_user_hive { "User".to_string() } else { "SYSTEM".to_string() });
     if let Ok(Some(ua_key)) = hive.open(r"Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist") {
         if let Ok(guid_keys) = ua_key.subkeys() {
             for guid_key in guid_keys {
                 if let Ok(Some(count_key)) = guid_key.subkey("Count") {
                     if let Ok(values) = count_key.values() {
-                        for val_res in values {
-                            if let Ok(val) = val_res {
-                                if let Data::Bytes(bytes) = val.data() {
-                                    if let Some(counts) = userassist::counts(&bytes) {
-                                        if counts.last_run > 0 {
-                                            if let Some(timestamp) = filetime_to_iso(counts.last_run) {
-                                                let decoded = userassist::decode(&val.name);
-                                                let resolved_path = userassist::path(&decoded);
-                                                let details = format!(
-                                                    "RunCount: {}, FocusCount: {:?}, FocusMs: {:?}",
-                                                    counts.run_count, counts.focus_count, counts.focus_ms
-                                                );
+                        for val in values.into_iter().flatten() {
+                            if let Data::Bytes(bytes) = val.data() {
+                                if let Some(counts) = userassist::counts(&bytes) {
+                                    if counts.last_run > 0 {
+                                        if let Some(timestamp) = filetime_to_iso(counts.last_run) {
+                                            let decoded = userassist::decode(&val.name);
+                                            let resolved_path = userassist::path(&decoded);
+                                            let details = format!(
+                                                "RunCount: {}, FocusCount: {:?}, FocusMs: {:?}",
+                                                counts.run_count, counts.focus_count, counts.focus_ms
+                                            );
 
-                                                events.push(Event {
-                                                    timestamp,
-                                                    computer: computer_name.clone(),
-                                                    artifact: "registry:userassist".to_string(),
-                                                    event_id: 0,
-                                                    pid: 0,
-                                                    subject_username: user_name.clone(),
-                                                    target_username: user_name.clone(),
-                                                    processname: resolved_path,
-                                                    commandline: Some(details),
-                                                    parentprocessname: "explorer.exe".to_string(),
-                                                });
-                                            }
+                                            events.push(Event {
+                                                timestamp,
+                                                computer: computer_name.clone(),
+                                                artifact: "registry:userassist".to_string(),
+                                                event_id: 0,
+                                                pid: 0,
+                                                subject_username: user_name.clone(),
+                                                target_username: user_name.clone(),
+                                                processname: resolved_path,
+                                                commandline: Some(details),
+                                                parentprocessname: "explorer.exe".to_string(),
+                                            });
                                         }
                                     }
                                 }
@@ -340,26 +383,24 @@ pub fn parse_registry_file(file_path: &Path, silent: bool) -> Result<Vec<Event>,
         if let Ok(Some(key)) = hive.open(path) {
             if let Some(timestamp) = filetime_to_iso(key.last_written) {
                 if let Ok(values) = key.values() {
-                    for val_res in values {
-                        if let Ok(val) = val_res {
-                            let mut cmd_str = String::new();
-                            if let Data::String(s) = val.data() {
-                                cmd_str = s;
-                            }
-                            if !cmd_str.is_empty() {
-                                events.push(Event {
-                                    timestamp: timestamp.clone(),
-                                    computer: computer_name.clone(),
-                                    artifact: "registry:runkeys".to_string(),
-                                    event_id: 0,
-                                    pid: 0,
-                                    subject_username: user_name.clone(),
-                                    target_username: user_name.clone(),
-                                    processname: val.name.clone(),
-                                    commandline: Some(format!("Key: {}\\{}, Cmd: {}", path, val.name, cmd_str)),
-                                    parentprocessname: "explorer.exe".to_string(),
-                                });
-                            }
+                    for val in values.into_iter().flatten() {
+                        let mut cmd_str = String::new();
+                        if let Data::String(s) = val.data() {
+                            cmd_str = s;
+                        }
+                        if !cmd_str.is_empty() {
+                            events.push(Event {
+                                timestamp: timestamp.clone(),
+                                computer: computer_name.clone(),
+                                artifact: "registry:runkeys".to_string(),
+                                event_id: 0,
+                                pid: 0,
+                                subject_username: user_name.clone(),
+                                target_username: user_name.clone(),
+                                processname: val.name.clone(),
+                                commandline: Some(format!("Key: {}\\{}, Cmd: {}", path, val.name, cmd_str)),
+                                parentprocessname: "explorer.exe".to_string(),
+                            });
                         }
                     }
                 }
@@ -530,24 +571,22 @@ pub fn parse_registry_file(file_path: &Path, silent: bool) -> Result<Vec<Event>,
                         if let Ok(Some(tr_key)) = hive.open(&tr_path) {
                             if let Some(timestamp) = filetime_to_iso(tr_key.last_written) {
                                 if let Ok(values) = tr_key.values() {
-                                    for val_res in values {
-                                        if let Ok(val) = val_res {
-                                            events.push(Event {
-                                                timestamp: timestamp.clone(),
-                                                computer: computer_name.clone(),
-                                                artifact: "registry:msoffice:trustrecords".to_string(),
-                                                event_id: 0,
-                                                pid: 0,
-                                                subject_username: user_name.clone(),
-                                                target_username: user_name.clone(),
-                                                processname: val.name.clone(),
-                                                commandline: Some(format!(
-                                                    "Office: {}/{} Trusted Document / Macro Execution Enabled",
-                                                    ver_key.name, app_key.name
-                                                )),
-                                                parentprocessname: format!("{}.exe", app_key.name),
-                                            });
-                                        }
+                                    for val in values.into_iter().flatten() {
+                                        events.push(Event {
+                                            timestamp: timestamp.clone(),
+                                            computer: computer_name.clone(),
+                                            artifact: "registry:msoffice:trustrecords".to_string(),
+                                            event_id: 0,
+                                            pid: 0,
+                                            subject_username: user_name.clone(),
+                                            target_username: user_name.clone(),
+                                            processname: val.name.clone(),
+                                            commandline: Some(format!(
+                                                "Office: {}/{} Trusted Document / Macro Execution Enabled",
+                                                ver_key.name, app_key.name
+                                            )),
+                                            parentprocessname: format!("{}.exe", app_key.name),
+                                        });
                                     }
                                 }
                             }
@@ -631,6 +670,16 @@ fn is_likely_registry_file(path: &Path) -> bool {
 
 /// Processes a Registry target (single file or recursive directory) and returns extracted events
 pub fn process_registry_target(target: &Path, silent: bool) -> Result<Vec<Event>, Box<dyn Error>> {
+    process_registry_target_with_hint(target, silent, None)
+}
+
+/// Same as [`process_registry_target`] with a hostname hint discovered during ingestion (triage
+/// package name). The computer name stored in a SYSTEM hive found alongside still wins.
+pub fn process_registry_target_with_hint(
+    target: &Path,
+    silent: bool,
+    hint: Option<&str>,
+) -> Result<Vec<Event>, Box<dyn Error>> {
     let mut all_events = Vec::new();
 
     if target.is_dir() {
@@ -640,6 +689,17 @@ pub fn process_registry_target(target: &Path, silent: bool) -> Result<Vec<Event>
 
         if reg_files.is_empty() {
             return Ok(all_events);
+        }
+
+        // The SYSTEM hive is the only one that knows the computer name: resolve it first so the
+        // events of NTUSER.DAT / SOFTWARE / Amcache collected alongside are attributed to the host.
+        let default_computer = reg_files
+            .iter()
+            .filter(|f| is_system_hive_name(Path::new(f)))
+            .find_map(|f| detect_computer_name(Path::new(f)))
+            .or_else(|| hint.map(|h| h.to_string()));
+        if let Some(ref name) = default_computer {
+            log_message(silent, &format!("🖥️ Computer name for hives in this target: {}", name));
         }
 
         let pb = ProgressBar::new(reg_files.len() as u64);
@@ -654,7 +714,13 @@ pub fn process_registry_target(target: &Path, silent: bool) -> Result<Vec<Event>
             .filter_map(|file| {
                 let path = Path::new(file);
                 log_message(silent, &format!("Processing Registry hive: {}", path.display()));
-                let res = parse_registry_file(path, silent).ok();
+                let res = match parse_registry_file_with_defaults(path, silent, default_computer.as_deref()) {
+                    Ok(events) => Some(events),
+                    Err(e) => {
+                        log_message(silent, &format!("⚠️ Warning: cannot parse hive {}: {}", path.display(), e));
+                        None
+                    }
+                };
                 pb.inc(1);
                 res
             })
@@ -663,7 +729,7 @@ pub fn process_registry_target(target: &Path, silent: bool) -> Result<Vec<Event>
         pb.finish_and_clear();
         all_events = processed.into_iter().flatten().collect();
     } else if target.is_file() {
-        all_events = parse_registry_file(target, silent)?;
+        all_events = parse_registry_file_with_defaults(target, silent, hint)?;
     }
 
     Ok(all_events)

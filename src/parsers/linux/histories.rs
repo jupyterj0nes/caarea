@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use crate::utils::{epoch_to_iso, systemtime_to_iso};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -36,11 +36,8 @@ pub fn parse_bash_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
     let fallback_timestamp = fs::metadata(file_path)
         .ok()
         .and_then(|m| m.modified().ok())
-        .map(|st| {
-            let dt: DateTime<Utc> = st.into();
-            dt.to_rfc3339()
-        })
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string());
+        .map(systemtime_to_iso)
+        .unwrap_or_else(|| "1970-01-01T00:00:00.000000Z".to_string());
 
     let reader = BufReader::new(file);
     let mut current_epoch: Option<i64> = None;
@@ -65,9 +62,7 @@ pub fn parse_bash_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
         }
 
         let iso_ts = match current_epoch {
-            Some(epoch) => DateTime::from_timestamp(epoch, 0)
-                .map(|dt| dt.to_rfc3339())
-                .unwrap_or_else(|| fallback_timestamp.clone()),
+            Some(epoch) => epoch_to_iso(epoch, 0).unwrap_or_else(|| fallback_timestamp.clone()),
             None => fallback_timestamp.clone(),
         };
 
@@ -118,9 +113,7 @@ pub fn parse_zsh_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
 
                 let epoch_str = header.split(':').next().unwrap_or("");
                 if let Ok(epoch) = epoch_str.parse::<i64>() {
-                    let iso_ts = DateTime::from_timestamp(epoch, 0)
-                        .map(|dt| dt.to_rfc3339())
-                        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string());
+                    let iso_ts = epoch_to_iso(epoch, 0).unwrap_or_else(|| "1970-01-01T00:00:00.000000Z".to_string());
 
                     let proc_name = command.split_whitespace().next().unwrap_or(command).to_string();
 
@@ -156,11 +149,8 @@ pub fn parse_viminfo(file_path: &Path, computer_name: &str) -> Vec<Event> {
     let fallback_timestamp = fs::metadata(file_path)
         .ok()
         .and_then(|m| m.modified().ok())
-        .map(|st| {
-            let dt: DateTime<Utc> = st.into();
-            dt.to_rfc3339()
-        })
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string());
+        .map(systemtime_to_iso)
+        .unwrap_or_else(|| "1970-01-01T00:00:00.000000Z".to_string());
 
     let reader = BufReader::new(file);
 

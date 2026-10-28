@@ -4,6 +4,7 @@ pub mod triage;
 
 use chrono::Local;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,7 +25,24 @@ fn log_message(silent: bool, message: &str) {
 pub struct EvidenceWorkspace {
     pub directories: Vec<String>,
     pub files: Vec<String>,
+    /// Hostname hints learnt during ingestion (triage package names), keyed by extracted directory
+    pub hostnames: HashMap<String, String>,
+    /// Provenance tags for directories that are not the live evidence (Volume Shadow Copies),
+    /// keyed by extracted directory, e.g. `vss:2026-09-04T08:12:53Z`
+    pub origins: HashMap<String, String>,
     temp_dir: Option<PathBuf>,
+}
+
+impl EvidenceWorkspace {
+    /// Hostname hint for a directory, if ingestion learnt one
+    pub fn hostname_hint(&self, dir: &str) -> Option<&str> {
+        self.hostnames.get(dir).map(|s| s.as_str())
+    }
+
+    /// Provenance tag for a directory (shadow copy), if any
+    pub fn origin_tag(&self, dir: &str) -> Option<&str> {
+        self.origins.get(dir).map(|s| s.as_str())
+    }
 }
 
 impl EvidenceWorkspace {
@@ -53,6 +71,8 @@ pub fn prepare_evidence(
 ) -> Result<EvidenceWorkspace, Box<dyn std::error::Error>> {
     let mut directories = Vec::new();
     let mut files = Vec::new();
+    let mut hostnames: HashMap<String, String> = HashMap::new();
+    let mut origins: HashMap<String, String> = HashMap::new();
     let mut archives_to_extract = Vec::new();
     let mut images_to_extract = Vec::new();
 
@@ -87,11 +107,10 @@ pub fn prepare_evidence(
                             if !images_to_extract.contains(&p.to_path_buf()) {
                                 images_to_extract.push(p.to_path_buf());
                             }
-                        } else if is_supported_archive(p) {
-                            if !archives_to_extract.contains(&p.to_path_buf()) {
+                        } else if is_supported_archive(p)
+                            && !archives_to_extract.contains(&p.to_path_buf()) {
                                 archives_to_extract.push(p.to_path_buf());
                             }
-                        }
                     }
                 }
             }
@@ -116,8 +135,13 @@ pub fn prepare_evidence(
 
             for img in images_to_extract {
                 match unpack_disk_image(&img, &staging, silent) {
-                    Ok(extracted_dir) => {
-                        directories.push(extracted_dir.to_string_lossy().to_string());
+                    Ok(extraction) => {
+                        directories.push(extraction.live_dir.to_string_lossy().to_string());
+                        for (dir, tag) in extraction.shadow_dirs {
+                            let d = dir.to_string_lossy().to_string();
+                            origins.insert(d.clone(), tag);
+                            directories.push(d);
+                        }
                     }
                     Err(e) => {
                         log_message(
@@ -154,6 +178,7 @@ pub fn prepare_evidence(
                     p.set_message(name.to_string());
                 }
 
+                let mut triage_host: Option<String> = None;
                 if let Some(info) = inspect_triage_archive(archive) {
                     let host_str = info
                         .hostname
@@ -170,12 +195,17 @@ pub fn prepare_evidence(
                             host_str
                         ),
                     );
+                    triage_host = info.hostname;
                 }
 
                 match unpack_archive_recursive(archive, &staging, silent) {
                     Ok(extracted_paths) => {
                         for p in extracted_paths {
-                            directories.push(p.to_string_lossy().to_string());
+                            let dir = p.to_string_lossy().to_string();
+                            if let Some(ref h) = triage_host {
+                                hostnames.insert(dir.clone(), h.clone());
+                            }
+                            directories.push(dir);
                         }
                     }
                     Err(e) => {
@@ -200,6 +230,8 @@ pub fn prepare_evidence(
     Ok(EvidenceWorkspace {
         directories,
         files,
+        hostnames,
+        origins,
         temp_dir: temp_staging_dir,
     })
 }
