@@ -76,6 +76,12 @@ pub fn build_cli() -> Command {
                 .help("Time zone of the Linux host(s) for zone-less logs (classic syslog, dpkg, ps): IANA name, UTC or ±HH:MM. Default: detected from /etc/timezone, /etc/localtime, timedatectl or date output"),
         )
         .arg(
+            Arg::new("stage_dir")
+                .long("stage-dir")
+                .value_name("PATH")
+                .help("Keep the artifacts extracted from images, live volumes and archives in this folder instead of a temporary one that is deleted at the end"),
+        )
+        .arg(
             Arg::new("overwrite")
                 .long("overwrite")
                 .help("Overwrite the output file if it already exists")
@@ -127,9 +133,12 @@ pub fn validate_input(
         }
     }
 
-    // Validate files
+    // Validate files (a raw volume such as \\.\C: is opened later, not checked here)
     if let Some(files) = files {
         for file in files {
+            if crate::ingest::live::is_live_volume(file) {
+                continue;
+            }
             let normalized = normalize_path(file);
             if !Path::new(&normalized).is_file() {
                 return Err(format!("❌ Error: File '{}' does not exist.", normalized));

@@ -13,5 +13,5 @@ param(
     [string] $Zone = 'europe-west1-d'
 )
 $ErrorActionPreference = 'Stop'
-& gcloud compute ssh $Instance --tunnel-through-iap --zone=$Zone --project=$Project --quiet `
-    --ssh-flag='-o LogLevel=ERROR' --command $Command
+# gcloud on Windows drives plink, which takes no OpenSSH -o flags
+& gcloud compute ssh $Instance --tunnel-through-iap --zone=$Zone --project=$Project --quiet --command $Command

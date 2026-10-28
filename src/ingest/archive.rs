@@ -60,6 +60,18 @@ pub fn is_relevant_artifact(entry_name: &str) -> bool {
         return true;
     }
 
+    // NTFS metadata copies as triage tools name them
+    if file_name == "$mft"
+        || file_name.ends_with("$mft")
+        || file_name.ends_with("_mft")
+        || file_name == "$j"
+        || file_name == "$usnjrnl%3a$j"
+        || file_name == "$usnjrnl_$j"
+        || file_name == "$usnjrnl$j"
+    {
+        return true;
+    }
+
     // Windows file artifacts: PowerShell history, WER reports, Defender logs, PCA logs,
     // scheduled task definitions (extension-less files under a Tasks folder)
     if file_name == "consolehost_history.txt"

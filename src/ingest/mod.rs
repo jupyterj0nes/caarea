@@ -1,5 +1,6 @@
 pub mod archive;
 pub mod image;
+pub mod live;
 pub mod triage;
 pub mod vhd;
 pub mod vmdk;
@@ -71,6 +72,7 @@ pub fn prepare_evidence(
     raw_dirs: Option<&[String]>,
     raw_files: Option<&[String]>,
     silent: bool,
+    stage_dir: Option<&Path>,
 ) -> Result<EvidenceWorkspace, Box<dyn std::error::Error>> {
     let mut directories = Vec::new();
     let mut files = Vec::new();
@@ -83,7 +85,9 @@ pub fn prepare_evidence(
     if let Some(file_list) = raw_files {
         for f in file_list {
             let path = Path::new(f);
-            if path.exists() {
+            if live::is_live_volume(f) {
+                images_to_extract.push(path.to_path_buf());
+            } else if path.exists() {
                 if is_supported_image(path) {
                     images_to_extract.push(path.to_path_buf());
                 } else if is_supported_archive(path) {
@@ -124,10 +128,20 @@ pub fn prepare_evidence(
     let mut temp_staging_dir: Option<PathBuf> = None;
 
     if !archives_to_extract.is_empty() || !images_to_extract.is_empty() {
-        let unique_id = format!("caarea_ingest_{}_{}", std::process::id(), chrono::Utc::now().timestamp_millis());
-        let staging = env::temp_dir().join(unique_id);
-        fs::create_dir_all(&staging)?;
-        temp_staging_dir = Some(staging.clone());
+        let staging = match stage_dir {
+            Some(dir) => {
+                fs::create_dir_all(dir)?;
+                log_message(silent, &format!("📁 Extracted artifacts are kept in {}", dir.display()));
+                dir.to_path_buf()
+            }
+            None => {
+                let unique_id = format!("caarea_ingest_{}_{}", std::process::id(), chrono::Utc::now().timestamp_millis());
+                let staging = env::temp_dir().join(unique_id);
+                fs::create_dir_all(&staging)?;
+                temp_staging_dir = Some(staging.clone());
+                staging
+            }
+        };
 
         // Process forensic disk images
         if !images_to_extract.is_empty() {

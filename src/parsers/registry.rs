@@ -666,6 +666,24 @@ pub fn parse_registry_file_with_defaults(
         }
     }
 
+    // Freed cells: keys and values deleted from the hive but not yet overwritten
+    let source = file_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let (recovered, deleted_keys, orphan_values) =
+        crate::parsers::registry_deleted::events_for_hive(&data[..], &computer_name, &user_name, &source);
+    if deleted_keys > 0 || orphan_values > 0 {
+        log_message(
+            silent,
+            &format!(
+                "  ♻️ {}: {} deleted key(s), {} freed value(s) -> {} recovered execution rows",
+                source,
+                deleted_keys,
+                orphan_values,
+                recovered.len()
+            ),
+        );
+    }
+    events.extend(recovered);
+
     events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
     print_registry_statistics(file_path, &events, silent);
 

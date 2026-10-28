@@ -246,7 +246,7 @@ mod tests {
         // match symbol = 256 + (length_code 0 | offset_bits 0 << 4) = 256 -> but 256 is EOF only when done.
         // Use length code 1 (length 4) offset bits 0: symbol 257. Give 'a' code 0 (len 1), 257 code 10 (len 2), 256 code 11 (len 2).
         let mut table = [0u8; 256];
-        table[0x61 / 2] |= 1 << ((0x61 % 2) * 4); // 'a' length 1
+        table[0x30] |= 0x10; // symbol 0x61 'a' (odd: high nibble of byte 0x30): length 1
         table[256 / 2] |= 2; // 256 length 2 (low nibble of byte 128)
         table[257 / 2] |= 2 << 4; // 257 length 2 (high nibble of byte 128)
         // canonical: 'a' = 0 ; 256 = 10 ; 257 = 11

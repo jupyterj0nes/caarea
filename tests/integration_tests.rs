@@ -145,7 +145,7 @@ fn test_triage_zip_ingest() {
     }
 
     let files = vec![temp_zip_path.to_string_lossy().to_string()];
-    let workspace = prepare_evidence(None, Some(&files), true).expect("Prepare evidence");
+    let workspace = prepare_evidence(None, Some(&files), true, None).expect("Prepare evidence");
 
     assert!(!workspace.directories.is_empty(), "Extracted triage dir should be present");
 

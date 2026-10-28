@@ -144,7 +144,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     }
 
     // Prepare evidence targets (unpacking triage archives, ZIP, TAR.GZ, disk images if present)
-    let workspace = ingest::prepare_evidence(directories.as_deref(), files.as_deref(), silent)?;
+    let stage_dir = matches.get_one::<String>("stage_dir").map(std::path::PathBuf::from);
+    let workspace = ingest::prepare_evidence(directories.as_deref(), files.as_deref(), silent, stage_dir.as_deref())?;
 
     let run_evtx = modules == "evtx" || modules == "all";
     let run_registry = modules == "registry" || modules == "all";
@@ -180,6 +181,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         }
         if run_windows {
             dir_events.extend(parsers::windows::process_windows_target(path, silent, hint));
+            dir_events.extend(parsers::ntfs::process_ntfs_target(path, silent, hint));
         }
         if run_linux {
             dir_events.extend(parsers::linux::process_linux_target_with_hint(path, silent, hint, tz_override.as_ref())?);
@@ -211,6 +213,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         } else if let Some(win_events) = parsers::windows::process_windows_file(path, &header[..bytes_read], silent) {
             if run_windows {
                 all_events.extend(win_events);
+            }
+        } else if let Some(ntfs_events) = parsers::ntfs::process_ntfs_file(path, &header[..bytes_read], silent) {
+            if run_windows {
+                all_events.extend(ntfs_events);
             }
         } else if run_linux {
             let parent = path.parent();

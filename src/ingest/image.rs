@@ -287,7 +287,72 @@ fn extract_artifacts_from_volume<R: Read + Seek>(volume: &mut R, part_dir: &Path
         );
     }
 
+    // 8. $MFT and the change journal $UsnJrnl:$J (its leading sparse hole is dropped)
+    let ntfs_dir = part_dir.join("ntfs");
+    if let Ok(mft_file) = navigate_to_path(&ntfs, &root_dir, volume, &["$MFT"]) {
+        let _ = fs::create_dir_all(&ntfs_dir);
+        if dump_ntfs_stream(&mft_file, volume, "", &ntfs_dir.join("$MFT"), false).is_ok() {
+            total_extracted += 1;
+        }
+    }
+    if let Ok(usn_file) = navigate_to_path(&ntfs, &root_dir, volume, &["$Extend", "$UsnJrnl"]) {
+        let _ = fs::create_dir_all(&ntfs_dir);
+        if dump_ntfs_stream(&usn_file, volume, "$J", &ntfs_dir.join("$UsnJrnl%3A$J"), true).is_ok() {
+            total_extracted += 1;
+        }
+    }
+
     Ok(total_extracted)
+}
+
+/// Dumps one `$DATA` stream (`""` for the unnamed one). With `trim_leading_zeros` the
+/// all-zero 64 KB blocks before the first data are not written, which turns the sparse
+/// change journal into a compact file.
+fn dump_ntfs_stream<R: Read + Seek>(
+    file: &ntfs::NtfsFile,
+    reader: &mut R,
+    stream: &str,
+    out_path: &Path,
+    trim_leading_zeros: bool,
+) -> Result<(), io::Error> {
+    let data_item = match file.data(reader, stream) {
+        Some(Ok(d)) => d,
+        _ => return Err(io::Error::new(io::ErrorKind::NotFound, "No data attribute")),
+    };
+    let data_attr = data_item.to_attribute().map_err(|e| io::Error::other(e.to_string()))?;
+    let data_val = data_attr.value(reader).map_err(|e| io::Error::other(e.to_string()))?;
+    let mtime = file.info().ok().and_then(|i| filetime_to_systemtime(i.modification_time().nt_timestamp()));
+    let mut attached = data_val.attach(reader);
+    let mut out_file = File::create(out_path)?;
+    let mut buf = vec![0u8; 65536];
+    let mut seen_data = !trim_leading_zeros;
+    loop {
+        let mut filled = 0usize;
+        while filled < buf.len() {
+            match attached.read(&mut buf[filled..]) {
+                Ok(0) => break,
+                Ok(n) => filled += n,
+                Err(e) => return Err(e),
+            }
+        }
+        if filled == 0 {
+            break;
+        }
+        if !seen_data {
+            if buf[..filled].iter().all(|&b| b == 0) {
+                continue;
+            }
+            seen_data = true;
+        }
+        out_file.write_all(&buf[..filled])?;
+        if filled < buf.len() {
+            break;
+        }
+    }
+    if let Some(t) = mtime {
+        let _ = out_file.set_modified(t);
+    }
+    Ok(())
 }
 
 /// Dumps every file under `dir` (recursively, `depth` levels) whose name satisfies `pred`,
@@ -552,6 +617,7 @@ fn dump_ntfs_file_data<R: Read + Seek>(file: &ntfs::NtfsFile, reader: &mut R, ou
 
     let data_attr = data_item.to_attribute().map_err(|e| io::Error::other(e.to_string()))?;
     let data_val = data_attr.value(reader).map_err(|e| io::Error::other(e.to_string()))?;
+    let mtime = file.info().ok().and_then(|i| filetime_to_systemtime(i.modification_time().nt_timestamp()));
     let mut attached = data_val.attach(reader);
 
     let mut out_file = File::create(out_path)?;
@@ -564,8 +630,22 @@ fn dump_ntfs_file_data<R: Read + Seek>(file: &ntfs::NtfsFile, reader: &mut R, ou
             Err(e) => return Err(e),
         }
     }
+    if let Some(t) = mtime {
+        let _ = out_file.set_modified(t);
+    }
 
     Ok(())
+}
+
+/// FILETIME to `SystemTime`; `None` for zero or pre-1970 values. Extracted copies keep the
+/// original modification time because several parsers (PowerShell history, task XML) have
+/// no better clock than the file's.
+fn filetime_to_systemtime(ft: u64) -> Option<std::time::SystemTime> {
+    const EPOCH_DIFF: u64 = 116_444_736_000_000_000;
+    if ft <= EPOCH_DIFF {
+        return None;
+    }
+    Some(std::time::UNIX_EPOCH + std::time::Duration::from_nanos((ft - EPOCH_DIFF).saturating_mul(100)))
 }
 
 /// Result of staging a disk image: the live volume artifacts plus one directory per Volume
@@ -582,18 +662,30 @@ pub fn unpack_disk_image(
     dest_staging: &Path,
     silent: bool,
 ) -> Result<ImageExtraction, Box<dyn std::error::Error>> {
-    let stem = image_path.file_stem().and_then(|s| s.to_str()).unwrap_or("disk_image");
-    let out_dir = dest_staging.join(stem);
+    let path_str = image_path.to_string_lossy().to_string();
+    let live_volume = crate::ingest::live::is_live_volume(&path_str);
+    let stem = if live_volume {
+        crate::ingest::live::live_label(&path_str)
+    } else {
+        image_path.file_stem().and_then(|s| s.to_str()).unwrap_or("disk_image").to_string()
+    };
+    let out_dir = dest_staging.join(&stem);
     let live_dir = out_dir.join("live");
     let vss_root = out_dir.join("vss");
     fs::create_dir_all(&live_dir)?;
 
-    let path_str = image_path.to_string_lossy().to_string();
     let lower = path_str.to_lowercase();
 
     log_message(silent, &format!("💿 Opening forensic disk image: {}", image_path.display()));
 
-    let shadow_dirs = if lower.ends_with(".e01") || lower.ends_with(".ex01") {
+    let shadow_dirs = if live_volume {
+        let (mut reader, total_size) = crate::ingest::live::open_live_volume(&path_str)?;
+        log_message(
+            silent,
+            &format!("  ├─ Live NTFS volume {}: {:.2} GB, read directly from the device", path_str, total_size as f64 / 1_073_741_824.0),
+        );
+        process_seekable_image(&mut reader, total_size, &live_dir, &vss_root, silent)?
+    } else if lower.ends_with(".e01") || lower.ends_with(".ex01") {
         let ewf_reader = ewf::EwfReader::open(&path_str).map_err(|e| format!("Failed to open E01 image: {}", e))?;
         let total_size = ewf_reader.total_size();
         log_message(

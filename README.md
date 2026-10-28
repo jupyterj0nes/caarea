@@ -35,6 +35,7 @@ cargo build --release          # binary in target/release/caarea[.exe]
 | You have | Run |
 | :--- | :--- |
 | A disk image (E01, Ex01, raw, dd, 001) or a virtual disk (VMDK, VHD, VHDX) | `caarea -f disk.E01 -o out.csv` |
+| A running Windows host (triage in place, as administrator) | `caarea -f \\.\C: -o out.csv --stage-dir D:\case\extracted` |
 | Triage packages (KAPE, Velociraptor, UAC, Cortex XDR, CyLR), zipped or not | `caarea -d /path/to/packages -o out.csv` |
 | A folder you collected by hand (`C:\Windows\System32\winevt\Logs`, `/var/log`, ...) | `caarea -d /path/to/folder -o out.csv` |
 | Single files (an EVTX, a hive, an `audit.log`) | `caarea -f Security.evtx -f SYSTEM -f audit.log -o out.csv` |
@@ -92,6 +93,8 @@ Two real rows:
 | WER `Report.wer` | crashed program, module, exception, PID | `ReportArchive` and `ReportQueue` |
 | Defender `MPLog-*.log`, `MPDetection-*.log` | processes the engine scanned on behalf of (with PID), behaviour-monitoring images, detections | |
 | PCA `PcaAppLaunchDic.txt`, `PcaGeneralDb*.txt` (Windows 11) | program launches with time, exit code | |
+| `$MFT` | executables and scripts written outside the system folders (created and modified times, size, resident script content quoted), Prefetch, logs, hives and histories anywhere; freed records carry the `deleted` origin | `$SI` created before `$FN` created is noted |
+| `$UsnJrnl:$J` | every program run (its Prefetch file is created or rewritten), binaries dropped, renamed, modified or deleted, event logs truncated, histories and reports removed | folders come from the `$MFT` of the same volume |
 | SYSTEM / SOFTWARE | BAM/DAM, ShimCache, services, Run/RunOnce, TaskCache, IFEO/Winlogon/AppInit, installed programs | |
 | NTUSER.DAT / UsrClass.dat | UserAssist, RunMRU, RecentDocs, TypedPaths, WordWheelQuery, MUICache, Compatibility Assistant store, Office TrustRecords, profile load/unload | user taken from the path (`Users\<name>\NTUSER.DAT`) |
 | Amcache.hve | files and programs with SHA-1 | |
@@ -149,6 +152,7 @@ caarea [OPTIONS] --output <PATH>
       --start-time <TS>       Keep events from this time on
       --end-time <TS>         Keep events up to this time (a bare date includes the whole day)
       --tz <ZONE>             Time zone of the Linux hosts for zone-less logs (default: detected)
+      --stage-dir <PATH>      Keep the artifacts extracted from images, live volumes and archives here
       --overwrite             Replace the output file if it exists
   -s, --silent                Print nothing but errors
   -h, --help / -V, --version
