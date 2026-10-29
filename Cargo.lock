@@ -295,6 +295,7 @@ dependencies = [
  "lvm2",
  "lzma-rs",
  "mbrman",
+ "memchr",
  "mft",
  "ntfs",
  "quick-xml 0.31.0",

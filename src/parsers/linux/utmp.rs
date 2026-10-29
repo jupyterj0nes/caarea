@@ -49,52 +49,87 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
     let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     let failed_log = name.starts_with("btmp");
     let big = detect_big_endian(&data);
-    let mut events = Vec::new();
-    for rec in data.chunks_exact(RECORD) {
-        let ut_type = i32_at(rec, 0, big);
-        let pid = i32_at(rec, 4, big).max(0) as u32;
-        let line = cstr(&rec[8..40]);
-        let user = cstr(&rec[44..76]);
-        let host = cstr(&rec[76..332]);
-        let secs = i32_at(rec, 340, big) as i64;
-        let usec = i32_at(rec, 344, big).max(0) as u32;
-        if secs <= 0 {
-            continue;
-        }
-        let Some(ts) = epoch_to_iso(secs, usec * 1000) else { continue };
-        let (artifact, what) = match ut_type {
-            USER_PROCESS if failed_log => ("linux:utmp:failed_login", "Failed login"),
-            LOGIN_PROCESS if failed_log => ("linux:utmp:failed_login", "Failed login"),
-            USER_PROCESS => ("linux:utmp:login", "Login"),
-            DEAD_PROCESS => ("linux:utmp:logout", "Logout"),
-            BOOT_TIME => ("linux:utmp:boot", "System boot"),
-            RUN_LVL => ("linux:utmp:runlevel", "Run level change"),
-            _ => continue,
-        };
-        if ut_type == DEAD_PROCESS && user.is_empty() && line.is_empty() {
-            continue;
-        }
-        let mut details = format!("{}: {}", what, if user.is_empty() { "(no user)" } else { &user });
-        if !line.is_empty() {
-            details.push_str(&format!(" on {}", line));
-        }
-        if !host.is_empty() {
-            details.push_str(&format!(" from {}", host));
-        }
-        events.push(Event {
-            timestamp: ts,
-            computer: computer.to_string(),
-            artifact: artifact.to_string(),
-            event_id: 0,
-            pid,
-            subject_username: user.clone(),
-            target_username: String::new(),
-            processname: if line.is_empty() { "login".to_string() } else { line.clone() },
-            commandline: Some(details),
-            parentprocessname: name.clone(),
-        });
+    data.chunks_exact(RECORD).filter_map(|rec| record_event(rec, big, failed_log, computer, &name)).collect()
+}
+
+/// One row for a 384-byte record; `None` for types that are not sessions or for empty ones.
+pub fn record_event(rec: &[u8], big: bool, failed_log: bool, computer: &str, source: &str) -> Option<Event> {
+    let ut_type = i32_at(rec, 0, big);
+    let pid = i32_at(rec, 4, big).max(0) as u32;
+    let line = cstr(&rec[8..40]);
+    let user = cstr(&rec[44..76]);
+    let host = cstr(&rec[76..332]);
+    let secs = i32_at(rec, 340, big) as i64;
+    let usec = i32_at(rec, 344, big).max(0) as u32;
+    if secs <= 0 {
+        return None;
     }
-    events
+    let ts = epoch_to_iso(secs, usec * 1000)?;
+    let (artifact, what) = match ut_type {
+        USER_PROCESS if failed_log => ("linux:utmp:failed_login", "Failed login"),
+        LOGIN_PROCESS if failed_log => ("linux:utmp:failed_login", "Failed login"),
+        USER_PROCESS => ("linux:utmp:login", "Login"),
+        DEAD_PROCESS => ("linux:utmp:logout", "Logout"),
+        BOOT_TIME => ("linux:utmp:boot", "System boot"),
+        RUN_LVL => ("linux:utmp:runlevel", "Run level change"),
+        _ => return None,
+    };
+    if ut_type == DEAD_PROCESS && user.is_empty() && line.is_empty() {
+        return None;
+    }
+    let mut details = format!("{}: {}", what, if user.is_empty() { "(no user)" } else { &user });
+    if !line.is_empty() {
+        details.push_str(&format!(" on {}", line));
+    }
+    if !host.is_empty() {
+        details.push_str(&format!(" from {}", host));
+    }
+    Some(Event {
+        timestamp: ts,
+        computer: computer.to_string(),
+        artifact: artifact.to_string(),
+        event_id: 0,
+        pid,
+        subject_username: user.clone(),
+        target_username: String::new(),
+        processname: if line.is_empty() { "login".to_string() } else { line.clone() },
+        commandline: Some(details),
+        parentprocessname: source.to_string(),
+    })
+}
+
+/// Strict plausibility for a record found in raw bytes: a session type, a printable user
+/// and line, a time between 2000 and 2040, zero padding where the struct has it.
+pub fn carved_candidate(rec: &[u8]) -> Option<(bool, i32)> {
+    if rec.len() < RECORD {
+        return None;
+    }
+    for big in [false, true] {
+        let t = i32_at(rec, 0, big);
+        if !matches!(t, USER_PROCESS | DEAD_PROCESS | BOOT_TIME | LOGIN_PROCESS) {
+            continue;
+        }
+        let secs = i32_at(rec, 340, big) as i64;
+        if !(946_684_800..2_208_988_800).contains(&secs) {
+            continue;
+        }
+        let pid = i32_at(rec, 4, big);
+        if !(0..1 << 22).contains(&pid) {
+            continue;
+        }
+        let user = cstr(&rec[44..76]);
+        let line = cstr(&rec[8..40]);
+        let printable = |s: &str| s.chars().all(|c| c.is_ascii_graphic() || c == ' ');
+        if !printable(&user) || !printable(&line) || (t == USER_PROCESS && user.is_empty()) {
+            continue;
+        }
+        // reserved tail of the struct is zero in real records
+        if rec[364..384].iter().any(|&b| b != 0) {
+            continue;
+        }
+        return Some((big, t));
+    }
+    None
 }
 
 #[cfg(test)]

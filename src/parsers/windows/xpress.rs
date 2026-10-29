@@ -122,7 +122,7 @@ fn build_table(lengths: &[u8; 512]) -> Result<Vec<(u16, u8)>, String> {
 
 /// Decompresses an LZXPRESS Huffman stream into exactly `expected_len` bytes.
 pub fn decompress(input: &[u8], expected_len: usize) -> Result<Vec<u8>, String> {
-    if expected_len > 256 << 20 {
+    if expected_len > 64 << 20 {
         return Err(format!("implausible decompressed size {}", expected_len));
     }
     let mut out: Vec<u8> = Vec::with_capacity(expected_len);

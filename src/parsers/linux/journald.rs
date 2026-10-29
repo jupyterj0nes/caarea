@@ -40,12 +40,40 @@ fn first_token(cmd: &str) -> String {
 
 pub fn parse_file(path: &Path, computer_hint: &str) -> Vec<Event> {
     let Ok(file) = File::open(path) else { return Vec::new() };
-    let Ok(mut reader) = systemd_journal_reader::JournalReader::new(file) else { return Vec::new() };
+    let debug = std::env::var_os("CAAREA_DEBUG_JOURNAL").is_some();
+    let mut reader = match systemd_journal_reader::JournalReader::new(file) {
+        Ok(r) => r,
+        Err(e) => {
+            if debug {
+                eprintln!("[journal] {}: open failed: {}", path.display(), e);
+            }
+            return Vec::new();
+        }
+    };
     let source = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let mut events = Vec::new();
     let mut seen_processes: HashSet<(u32, String)> = HashSet::new();
+    let mut entries = 0usize;
+    // kernel audit records journald received on its audit socket (no auditd running):
+    // rebuilt as audit.log lines and assembled by the audit parser
+    let mut audit_lines: Vec<String> = Vec::new();
+    let mut audit_host = computer_hint.to_string();
 
     while let Some(entry) = reader.next_entry() {
+        entries += 1;
+        if debug && entries <= 3 {
+            eprintln!("[journal] entry realtime={} fields={:?}", entry.realtime, entry.fields.keys().collect::<Vec<_>>());
+        }
+        if field(&entry, "_TRANSPORT").as_deref() == Some("audit") {
+            if let (Some(kind), Some(id), Some(msg)) = (field(&entry, "_AUDIT_TYPE_NAME"), field(&entry, "_AUDIT_ID"), field(&entry, "MESSAGE")) {
+                let micros = field(&entry, "_SOURCE_REALTIME_TIMESTAMP").and_then(|s| s.parse::<u64>().ok()).unwrap_or(entry.realtime);
+                audit_lines.push(format!("type={} msg=audit({}.{:03}:{}): {}", kind, micros / 1_000_000, (micros % 1_000_000) / 1000, id, msg));
+                if let Some(h) = field(&entry, "_HOSTNAME") {
+                    audit_host = h;
+                }
+            }
+            continue;
+        }
         let secs = (entry.realtime / 1_000_000) as i64;
         let nanos = ((entry.realtime % 1_000_000) * 1_000) as u32;
         let Some(ts) = epoch_to_iso(secs, nanos) else { continue };
@@ -120,6 +148,16 @@ pub fn parse_file(path: &Path, computer_hint: &str) -> Vec<Event> {
                 events.push(mk(ts, "linux:journal:process", uid.clone(), String::new(), exe, format!("{} (first message: {})", cmdline, msg.chars().take(120).collect::<String>()), source.clone()));
             }
         }
+    }
+    if !audit_lines.is_empty() {
+        let from_audit = crate::parsers::linux::audit::parse_audit_lines(audit_lines.into_iter(), &audit_host);
+        events.extend(from_audit.into_iter().map(|mut e| {
+            e.parentprocessname = format!("{} (journal audit transport)", e.parentprocessname);
+            e
+        }));
+    }
+    if debug {
+        eprintln!("[journal] {}: {} entries read, {} rows", path.display(), entries, events.len());
     }
     events
 }

@@ -25,6 +25,7 @@ ext4-view = { version = "1.0", features = ["std"] }
 lvm2 = "0.0.3"
 systemd-journal-reader = "0.1.1"
 lzma-rs = "0.3"
+memchr = "2"
 mbrman = "0.6"
 vshadow = "0.2"
 regex = "1.10"

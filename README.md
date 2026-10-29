@@ -139,6 +139,13 @@ E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or 
 | `$I30` index blocks (`INDX`) | fixups, then the entries left in the slack after a deletion | the deleted child's name and times |
 | USN journal records | coherent length, version 2 or 3, plausible time, printable name | the same rows as the live journal: Prefetch runs, drops, renames, deletions, log truncation |
 | Prefetch (`MAM`, `SCCA`) | the file decompresses and parses | one row per run |
+| systemd journal files (`LPKSHHRH`) | header with the file's own size | the file, read by the journal parser (Linux images and blobs) |
+| `pacct` records | version 3, printable command, start time between 2000 and 2040, small ids | one row per process, same columns as the live parser |
+| utmp records | session type, printable user and line, plausible time, zero padding | logins, logouts, boots |
+| auditd lines | `type=... msg=audit(<10-digit epoch>...)` at the start of a text run | assembled like `audit.log`: `execve` with argv and cwd, `USER_CMD` |
+| shell history with stamps | `#<epoch>` line followed by a command | the command at that time |
+
+Linux structures are looked for in images with ext4 or LVM partitions and in blobs; Windows structures everywhere. The journal of a running system also receives kernel audit records when no `auditd` is installed; those are assembled into `execve` rows like an `audit.log`.
 
 Rows from carving carry the `carved` origin with the byte offset, and the container when it is not the disk itself: `evtx:4688:carved [@0x1c3f80000]`, `prefetch:carved [pagefile @0x4f000]`. A carved row identical to a live one is dropped by the usual deduplication. Carving only recovers structures that carry their own time; it never guesses a timestamp.
 

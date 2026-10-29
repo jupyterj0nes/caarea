@@ -16,6 +16,7 @@
 
 pub mod evtx;
 pub mod hive;
+pub mod linux;
 pub mod ntfs;
 pub mod scan;
 pub mod source;
@@ -118,6 +119,8 @@ pub struct CarveStats {
     pub hives_rejected: usize,
     pub evtx_chunks: usize,
     pub evtx_files: usize,
+    /// Chunks that parsed on their own but crashed or hung the parser as part of a file.
+    pub evtx_chunks_dropped: usize,
     pub orphan_records: usize,
     pub file_records: usize,
     pub indx_entries: usize,
@@ -125,6 +128,11 @@ pub struct CarveStats {
     pub prefetch: usize,
     pub read_errors: usize,
     pub stalls: usize,
+    pub journals: usize,
+    pub pacct: usize,
+    pub utmp: usize,
+    pub audit_lines: usize,
+    pub history_lines: usize,
 }
 
 /// What one carving pass produced: directories with synthetic files for the normal parsers,
@@ -144,7 +152,12 @@ impl CarveOutput {
             parts.push(format!("{} hive(s) carved ({} identical to extracted, {} duplicate)", s.hives, s.hives_known, s.hives_duplicate));
         }
         if s.evtx_chunks > 0 {
-            parts.push(format!("{} EVTX chunk(s) in {} synthetic file(s)", s.evtx_chunks, s.evtx_files));
+            parts.push(format!(
+                "{} EVTX chunk(s) in {} synthetic file(s){}",
+                s.evtx_chunks,
+                s.evtx_files,
+                if s.evtx_chunks_dropped > 0 { format!(", {} chunk(s) dropped after failing validation", s.evtx_chunks_dropped) } else { String::new() }
+            ));
         }
         if s.orphan_records > 0 {
             parts.push(format!("{} orphan event record(s)", s.orphan_records));
@@ -154,6 +167,12 @@ impl CarveOutput {
         }
         if s.prefetch > 0 {
             parts.push(format!("{} prefetch file(s)", s.prefetch));
+        }
+        if s.journals > 0 || s.pacct > 0 || s.utmp > 0 || s.audit_lines > 0 || s.history_lines > 0 {
+            parts.push(format!(
+                "{} journal file(s), {} pacct record(s), {} utmp record(s), {} audit line(s), {} history command(s)",
+                s.journals, s.pacct, s.utmp, s.audit_lines, s.history_lines
+            ));
         }
         if s.read_errors > 0 || s.stalls > 0 {
             parts.push(format!("{} read error(s), {} stall(s)", s.read_errors, s.stalls));
@@ -165,7 +184,7 @@ impl CarveOutput {
     }
 }
 
-const SIGNATURES: [&[u8]; 9] = [
+const SIGNATURES: [&[u8]; 10] = [
     hive::REGF_MAGIC,
     evtx::CHUNK_MAGIC,
     ntfs::FILE_MAGIC,
@@ -175,7 +194,9 @@ const SIGNATURES: [&[u8]; 9] = [
     b"\x1a\0\0\0SCCA",
     b"\x17\0\0\0SCCA",
     b"\x11\0\0\0SCCA",
+    linux::JOURNAL_MAGIC,
 ];
+const SIG_JOURNAL: usize = 9;
 
 fn progress_bar(size: u64, silent: bool, label: &str) -> ProgressBar {
     if silent {
@@ -193,6 +214,7 @@ fn progress_bar(size: u64, silent: bool, label: &str) -> ProgressBar {
 
 /// Scans one source end to end. `known` holds fingerprints of hives already extracted by
 /// the file-system pass; `container` names a pagefile or blob (None for the disk itself).
+#[allow(clippy::too_many_arguments)]
 pub fn carve_source(
     src: &mut dyn BlockSource,
     out_dir: &Path,
@@ -200,6 +222,7 @@ pub fn carve_source(
     known_chunks: &HashSet<u64>,
     container: Option<&str>,
     computer: &str,
+    linux: bool,
     silent: bool,
 ) -> CarveOutput {
     let label = src.label().to_string();
@@ -265,17 +288,17 @@ pub fn carve_source(
                     chunk_ranges.borrow_mut().push((offset, offset + evtx::CHUNK_SIZE as u64));
                     return HitAction::SkipTo(offset + evtx::CHUNK_SIZE as u64);
                 }
-                match evtx::peek_chunk_provider(chunk.clone()) {
-                    Some(provider) => {
-                        chunk_ranges.borrow_mut().push((offset, offset + evtx::CHUNK_SIZE as u64));
-                        if groups.add(provider, offset, chunk) {
-                            stats.evtx_chunks += 1;
-                            pb.set_message(format!("{}: {} EVTX chunk(s)", source_name, stats.evtx_chunks));
-                        }
-                        HitAction::SkipTo(offset + evtx::CHUNK_SIZE as u64)
-                    }
-                    None => HitAction::Continue,
+                if !evtx::chunk_checksums_ok(&chunk) {
+                    return HitAction::Continue;
                 }
+                chunk_ranges.borrow_mut().push((offset, offset + evtx::CHUNK_SIZE as u64));
+                // one synthetic file per source: the parsers classify records by provider,
+                // chunks are self-contained, and nothing is parsed in this process
+                if groups.add("carved".to_string(), offset, chunk) {
+                    stats.evtx_chunks += 1;
+                    pb.set_message(format!("{}: {} EVTX chunk(s)", source_name, stats.evtx_chunks));
+                }
+                HitAction::SkipTo(offset + evtx::CHUNK_SIZE as u64)
             }
             2 => match ntfs::file_record_size(window) {
                 Some(size) => {
@@ -311,6 +334,28 @@ pub fn carve_source(
                 }
                 None => HitAction::Continue,
             },
+            SIG_JOURNAL => {
+                let Some(size) = linux::journal_size(window) else { return HitAction::Continue };
+                if !linux {
+                    return HitAction::SkipTo(offset + size);
+                }
+                let mut data = window[..window.len().min(size as usize)].to_vec();
+                while (data.len() as u64) < size {
+                    let want = (size - data.len() as u64).min(4 << 20) as usize;
+                    match src.read_block(offset + data.len() as u64, want) {
+                        Ok(b) if !b.is_empty() => data.extend_from_slice(&b),
+                        _ => break,
+                    }
+                }
+                let dir = out_dir.join(format!("journal_{:012x}", offset)).join("var").join("log").join("journal").join("carved");
+                if std::fs::create_dir_all(&dir).is_ok() && std::fs::write(dir.join(format!("carved_{:x}.journal", offset)), &data).is_ok() {
+                    stats.journals += 1;
+                    let mut prov = tag(offset);
+                    prov.detail = format!("{} journal {} bytes", prov.detail, data.len());
+                    dirs.push((out_dir.join(format!("journal_{:012x}", offset)), prov));
+                }
+                HitAction::SkipTo(offset + size)
+            }
             _ => {
                 let parsed = std::panic::catch_unwind(|| prefetch::parse(window)).ok().and_then(|r| r.ok());
                 match parsed {
@@ -336,10 +381,42 @@ pub fn carve_source(
     let mut block_events: Vec<Event> = Vec::new();
     let mut orphan_count = 0usize;
     let mut usn_count = 0usize;
+    let mut pacct_count = 0usize;
+    let mut utmp_count = 0usize;
+    let mut text = linux::TextCarve::default();
     let mut on_block = |base: u64, block: &[u8]| {
+        if linux {
+            text.scan_block(base, block);
+        }
         let mut pos = 0usize;
         while pos + 60 <= block.len() {
             let b = &block[pos..];
+            if linux {
+                // process accounting: version byte 3 is the cheapest first test
+                if b[1] & 0x7f == 3 && b.len() >= 64 {
+                    if let Some(mut e) = linux::pacct_event(b, computer) {
+                        // same columns as the live parser, so a carved copy of a live record
+                        // folds into it during deduplication
+                        e.artifact = tag(base + pos as u64).apply(&e.artifact);
+                        block_events.push(e);
+                        pacct_count += 1;
+                        pos += 64;
+                        continue;
+                    }
+                }
+                let utmp_le = b[1] == 0 && b[2] == 0 && b[3] == 0 && matches!(b[0], 2 | 6 | 7 | 8);
+                let utmp_be = b[0] == 0 && b[1] == 0 && b[2] == 0 && matches!(b[3], 2 | 6 | 7 | 8);
+                if b.len() >= 384 && (utmp_le || utmp_be) {
+                    if let Some(mut e) = linux::utmp_event(b, computer) {
+                        e.artifact = tag(base + pos as u64).apply(&e.artifact);
+                        e.parentprocessname = source_name.clone();
+                        block_events.push(e);
+                        utmp_count += 1;
+                        pos += 384;
+                        continue;
+                    }
+                }
+            }
             if b[0] == 0x2a && b[1] == 0x2a && b[2] == 0 && b[3] == 0 {
                 let abs = base + pos as u64;
                 if chunk_ranges.borrow().iter().any(|&(s, e)| abs >= s && abs < e) {
@@ -388,16 +465,26 @@ pub fn carve_source(
     events.extend(block_events);
     stats.orphan_records = orphan_count;
     stats.usn_records = usn_count;
+    stats.pacct = pacct_count;
+    stats.utmp = utmp_count;
+    stats.audit_lines = text.audit_lines.len();
+    stats.history_lines = text.history_lines.len() / 2;
+    for (dir, first_offset, count) in text.write(out_dir) {
+        let mut prov = Provenance::carved(first_offset, container);
+        prov.detail = format!("{} {} line(s)", prov.detail, count);
+        dirs.push((dir, prov));
+    }
     stats.bytes_read = scan_stats.bytes_read;
     stats.signatures = scan_stats.signatures;
     stats.read_errors = scan_stats.read_errors;
     stats.stalls = scan_stats.stalls.max(src.stalls());
 
-    for (dir, first_offset, chunks) in groups.write_all(out_dir) {
+    for (dir, first_offset, chunks, dropped) in groups.write_all(out_dir) {
         let mut prov = Provenance::carved(first_offset, container);
         prov.detail = format!("{} {} chunk(s)", prov.detail, chunks);
         dirs.push((dir, prov));
         stats.evtx_files += 1;
+        stats.evtx_chunks_dropped += dropped;
     }
     out
 }
@@ -408,14 +495,15 @@ pub fn carve_image(image_path: &Path, out_dir: &Path, extracted_root: Option<&Pa
     let mut src = open_source(image_path)?;
     let known = extracted_root.map(hive::fingerprints_under).unwrap_or_default();
     let known_chunks = extracted_root.map(evtx::chunk_hashes_under).unwrap_or_default();
-    let mut out = carve_source(&mut *src, out_dir, &known, &known_chunks, None, computer, silent);
-
-    // containers inside NTFS partitions
     let size = src.size();
-    let partitions = {
+    let (partitions, linux) = {
         let mut reader = SourceReader { src: &mut *src, pos: 0, base: 0 };
-        crate::ingest::image::find_ntfs_partitions(&mut reader, size).unwrap_or_default()
+        let ntfs_parts = crate::ingest::image::find_ntfs_partitions(&mut reader, size).unwrap_or_default();
+        let lp = crate::ingest::linux_image::find_linux_partitions(&mut reader);
+        let linux = !lp.ext4.is_empty() || !lp.lvm.is_empty() || ntfs_parts.is_empty();
+        (ntfs_parts, linux)
     };
+    let mut out = carve_source(&mut *src, out_dir, &known, &known_chunks, None, computer, linux, silent);
     for (idx, part_offset) in partitions.into_iter().enumerate() {
         for name in ["pagefile.sys", "swapfile.sys", "hiberfil.sys"] {
             let container_dir = out_dir.join(format!("partition_{}_{}", idx, name.replace('.', "_")));
@@ -465,7 +553,7 @@ fn carve_ntfs_file(
             return None;
         }
         let mut container = DirectSource::new(data, size, name.to_string());
-        Some(carve_source(&mut container, out_dir, known, known_chunks, Some(name), computer, silent))
+        Some(carve_source(&mut container, out_dir, known, known_chunks, Some(name), computer, false, silent))
     })?;
     Ok(out.flatten())
 }
@@ -474,5 +562,5 @@ fn carve_ntfs_file(
 pub fn carve_blob(path: &Path, out_dir: &Path, computer: &str, silent: bool) -> Result<CarveOutput, String> {
     let mut src = open_source(path)?;
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "blob".to_string());
-    Ok(carve_source(&mut *src, out_dir, &HashSet::new(), &HashSet::new(), Some(&name), computer, silent))
+    Ok(carve_source(&mut *src, out_dir, &HashSet::new(), &HashSet::new(), Some(&name), computer, true, silent))
 }

@@ -13,7 +13,12 @@ Phase 7 (Windows carving) implemented: `--carve` scans images, live volumes, pag
 INDX, USN and Prefetch; hives and EVTX go to the staging folder and the normal parsers, the
 rest become rows directly. Known-copy skipping: hive fingerprints and chunk hashes of the
 extracted logs; only freed MFT records on the disk itself. hiberfil is scanned raw (its
-Xpress-compressed pages are not decoded yet). Phases 8 to 10 not started.
+Xpress-compressed pages are not decoded yet).
+Phase 8 (Linux carving) implemented on the same pass: journal files by header, pacct and
+utmp records by strict structure, audit lines and `#epoch` history blocks by text search
+(memchr); validated on an ext4 test image with the artifacts deleted (journal, audit lines,
+history, wtmp all came back). Journal entries carried on the audit transport (no auditd)
+are assembled into execve rows. Phases 9 and 10 not started.
 Lab notes: Windows Server does not write Prefetch even with `EnablePrefetcher=3`; the GCE VMDK
 export needs a free instance slot in the region (the kept jumpbox fills the quota of 8).
 

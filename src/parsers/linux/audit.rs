@@ -168,12 +168,17 @@ impl PendingExec {
 
 /// Parses an audit.log file for execution records (USER_CMD, SYSCALL execve + EXECVE argv).
 pub fn parse_audit_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
-    let mut events = Vec::new();
     let file = match File::open(file_path) {
         Ok(f) => f,
-        Err(_) => return events,
+        Err(_) => return Vec::new(),
     };
+    parse_audit_lines(BufReader::new(file).lines().map_while(Result::ok), computer_name)
+}
 
+/// Same as [`parse_audit_log`] over lines from anywhere: a file, a journal's audit transport,
+/// lines carved from raw bytes.
+pub fn parse_audit_lines(lines: impl Iterator<Item = String>, computer_name: &str) -> Vec<Event> {
+    let mut events = Vec::new();
     let header_re = match Regex::new(r"^type=(\w+)\s+msg=audit\((\d+)\.(\d+):(\d+)\)") {
         Ok(r) => r,
         Err(_) => return events,
@@ -184,14 +189,8 @@ pub fn parse_audit_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
     };
 
     let mut pending: HashMap<String, PendingExec> = HashMap::new();
-    let reader = BufReader::new(file);
 
-    for line_res in reader.lines() {
-        let line = match line_res {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-
+    for line in lines {
         let caps = match header_re.captures(&line) {
             Some(c) => c,
             None => continue,

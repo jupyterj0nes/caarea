@@ -97,6 +97,16 @@ fn resolve_time_window(
 
 /// Main function to run the tool
 pub fn run() -> Result<(), Box<dyn Error>> {
+    // Child-process mode used by the carver: parse one EVTX file and exit. A corrupt carved
+    // chunk can abort the process on an allocation failure; it must not take the run with it.
+    let argv: Vec<String> = std::env::args().collect();
+    if argv.len() >= 3 && argv[1] == carve::evtx::VALIDATE_ARG {
+        let code = match carve::evtx::parse_fully(Path::new(&argv[2])) {
+            Ok(_) => 0,
+            Err(_) => 2,
+        };
+        std::process::exit(code);
+    }
     // Build CLI and parse arguments
     let matches = cli::build_cli().get_matches();
 

@@ -107,47 +107,66 @@ pub fn parse_pacct_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
     };
 
     for chunk in data.chunks_exact(ACCT_RECORD_SIZE) {
-        let rec = match parse_acct_record(chunk) {
-            Some(r) => r,
-            None => continue,
-        };
-
-        if rec.btime == 0 || rec.comm.is_empty() {
-            continue;
+        if let Some(e) = parse_acct_record(chunk).and_then(|rec| record_event(&rec, computer_name)) {
+            events.push(e);
         }
-
-        let iso_ts = match epoch_to_iso(rec.btime, 0) {
-            Some(ts) => ts,
-            None => continue,
-        };
-
-        let is_superuser = rec.flag & ASU != 0;
-        let forked_only = rec.flag & AFORK != 0;
-        let dumped_core = rec.flag & ACORE != 0;
-        let killed_by_signal = rec.flag & AXSIG != 0;
-
-        let details = format!(
-            "Command: {}, UID: {}, SuperUser: {}, ForkNoExec: {}, CoreDump: {}, KilledBySignal: {}, AcctVersion: {}",
-            rec.comm, rec.uid, is_superuser, forked_only, dumped_core, killed_by_signal, rec.version
-        );
-
-        let user_label = if rec.uid == 0 { "root".to_string() } else { rec.uid.to_string() };
-
-        events.push(Event {
-            timestamp: iso_ts,
-            computer: computer_name.to_string(),
-            artifact: "linux:process:pacct".to_string(),
-            event_id: 0,
-            pid: rec.pid,
-            subject_username: user_label.clone(),
-            target_username: if is_superuser { "root".to_string() } else { user_label },
-            processname: rec.comm,
-            commandline: Some(details),
-            parentprocessname: if rec.ppid > 0 { format!("PID: {}", rec.ppid) } else { "N/A".to_string() },
-        });
     }
 
     events
+}
+
+/// One timeline row for a decoded record (`None` when it has no time or no command).
+pub fn record_event(rec: &AcctRecord, computer_name: &str) -> Option<Event> {
+    if rec.btime == 0 || rec.comm.is_empty() {
+        return None;
+    }
+    let iso_ts = epoch_to_iso(rec.btime, 0)?;
+    let is_superuser = rec.flag & ASU != 0;
+    let forked_only = rec.flag & AFORK != 0;
+    let dumped_core = rec.flag & ACORE != 0;
+    let killed_by_signal = rec.flag & AXSIG != 0;
+    let details = format!(
+        "Command: {}, UID: {}, SuperUser: {}, ForkNoExec: {}, CoreDump: {}, KilledBySignal: {}, AcctVersion: {}",
+        rec.comm, rec.uid, is_superuser, forked_only, dumped_core, killed_by_signal, rec.version
+    );
+    let user_label = if rec.uid == 0 { "root".to_string() } else { rec.uid.to_string() };
+    Some(Event {
+        timestamp: iso_ts,
+        computer: computer_name.to_string(),
+        artifact: "linux:process:pacct".to_string(),
+        event_id: 0,
+        pid: rec.pid,
+        subject_username: user_label.clone(),
+        target_username: if is_superuser { "root".to_string() } else { user_label },
+        processname: rec.comm.clone(),
+        commandline: Some(details),
+        parentprocessname: if rec.ppid > 0 { format!("PID: {}", rec.ppid) } else { "N/A".to_string() },
+    })
+}
+
+/// Strict plausibility for a record found in raw bytes, where there is no file to vouch
+/// for it: version 3 (or a legacy version with the byte-order flag only), a printable
+/// command, a start time between 2000 and 2040, small ids.
+pub fn carved_candidate(chunk: &[u8]) -> Option<AcctRecord> {
+    if chunk.len() < ACCT_RECORD_SIZE {
+        return None;
+    }
+    let flag = chunk[0];
+    let version = chunk[1] & !ACCT_BYTEORDER;
+    if flag & !(AFORK | ASU | ACORE | AXSIG | 0x04 | ACCT_BYTEORDER) != 0 || version != 3 {
+        return None;
+    }
+    let rec = parse_acct_record(chunk)?;
+    if !(946_684_800..2_208_988_800).contains(&rec.btime) {
+        return None;
+    }
+    if rec.comm.is_empty() || rec.comm.len() > 16 || !rec.comm.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
+        return None;
+    }
+    if rec.pid == 0 || rec.pid >= 1 << 22 || rec.ppid >= 1 << 22 || rec.uid >= 1 << 24 {
+        return None;
+    }
+    Some(rec)
 }
 
 #[cfg(test)]
