@@ -9,15 +9,16 @@ use std::io::{self, Read, Seek, SeekFrom};
 
 const BLOCK: u64 = 1 << 16;
 
-/// Is this a raw volume path (`\\.\C:`, `\\.\PhysicalDrive0`)?
+/// Is this a raw volume path (`\\.\C:`, `\\.\PhysicalDrive0` on Windows; `/dev/sda1`,
+/// `/dev/mapper/vg-root` on Linux)?
 pub fn is_live_volume(path: &str) -> bool {
     let p = path.trim();
-    (p.starts_with("\\\\.\\") || p.starts_with("//./")) && p.len() > 4
+    ((p.starts_with("\\\\.\\") || p.starts_with("//./")) && p.len() > 4) || p.starts_with("/dev/")
 }
 
-/// Short, file-system safe label for a device path: `\\.\C:` -> `live_C`.
+/// Short, file-system safe label for a device path: `\\.\C:` -> `live_C`, `/dev/sda1` -> `live_sda1`.
 pub fn live_label(path: &str) -> String {
-    let tail = path.trim().trim_start_matches("\\\\.\\").trim_start_matches("//./");
+    let tail = path.trim().trim_start_matches("\\\\.\\").trim_start_matches("//./").trim_start_matches("/dev/");
     let clean: String = tail.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     format!("live_{}", if clean.is_empty() { "volume".to_string() } else { clean })
 }
@@ -90,22 +91,26 @@ impl<R: Read + Seek> Seek for AlignedReader<R> {
     }
 }
 
-/// Opens a raw volume and sizes it from its NTFS boot sector.
+/// Opens a raw volume or disk device. The size comes from the NTFS boot sector when there is
+/// one (Windows volume handles cannot be measured with a seek), otherwise from seeking to the
+/// end, which Linux block devices support.
 pub fn open_live_volume(path: &str) -> Result<(AlignedReader<File>, u64), String> {
-    let file = File::open(path).map_err(|e| format!("cannot open {} (administrator rights are required): {}", path, e))?;
+    let mut file = File::open(path).map_err(|e| format!("cannot open {} (administrator or root rights are required): {}", path, e))?;
+    let seek_size = file.seek(SeekFrom::End(0)).ok().filter(|&s| s > 0);
     let mut probe = AlignedReader::new(file, BLOCK);
     let mut boot = [0u8; 512];
-    probe.read_exact(&mut boot).map_err(|e| format!("cannot read the boot sector of {}: {}", path, e))?;
-    if &boot[3..11] != b"NTFS    " {
-        return Err(format!("{} is not an NTFS volume (boot sector signature missing)", path));
-    }
-    let bytes_per_sector = u16::from_le_bytes([boot[11], boot[12]]) as u64;
-    let total_sectors = u64::from_le_bytes(boot[40..48].try_into().unwrap());
-    if bytes_per_sector == 0 || total_sectors == 0 {
-        return Err(format!("{}: implausible NTFS geometry", path));
-    }
-    // the boot sector copy is the sector after the last one counted
-    let size = (total_sectors + 1) * bytes_per_sector;
+    probe.read_exact(&mut boot).map_err(|e| format!("cannot read the first sector of {}: {}", path, e))?;
+    let size = if &boot[3..11] == b"NTFS    " {
+        let bytes_per_sector = u16::from_le_bytes([boot[11], boot[12]]) as u64;
+        let total_sectors = u64::from_le_bytes(boot[40..48].try_into().unwrap());
+        if bytes_per_sector == 0 || total_sectors == 0 {
+            return Err(format!("{}: implausible NTFS geometry", path));
+        }
+        // the boot sector copy is the sector after the last one counted
+        (total_sectors + 1) * bytes_per_sector
+    } else {
+        seek_size.ok_or_else(|| format!("{}: not an NTFS volume and the device size cannot be determined", path))?
+    };
     let inner = probe.inner;
     Ok((AlignedReader::new(inner, size), size))
 }

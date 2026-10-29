@@ -151,6 +151,69 @@ pub fn parse_systemd_service_file(file_path: &Path, computer_name: &str) -> Vec<
     events
 }
 
+/// `/var/lib/systemd/timers/stamp-<unit>.timer`: systemd touches the stamp when a persistent
+/// timer fires, so its modification time is the last trigger of that unit.
+pub fn parse_timer_stamp(file_path: &Path, computer_name: &str) -> Vec<Event> {
+    let name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let unit = name.trim_start_matches("stamp-").to_string();
+    let Some(ts) = fs::metadata(file_path).ok().and_then(|m| m.modified().ok()).map(systemtime_to_iso) else {
+        return Vec::new();
+    };
+    vec![Event {
+        timestamp: ts,
+        computer: computer_name.to_string(),
+        artifact: "linux:systemd:timer_triggered".to_string(),
+        event_id: 0,
+        pid: 0,
+        subject_username: "root".to_string(),
+        target_username: "root".to_string(),
+        processname: unit.trim_end_matches(".timer").to_string(),
+        commandline: Some(format!("systemd timer last fired: {} (stamp file time)", unit)),
+        parentprocessname: "systemd".to_string(),
+    }]
+}
+
+/// `*.timer` units (`/etc/systemd/system`): what they run and when. The row time is the unit
+/// file's modification time (when the timer was installed or changed).
+pub fn parse_timer_unit(file_path: &Path, computer_name: &str) -> Vec<Event> {
+    let Ok(text) = fs::read_to_string(file_path) else { return Vec::new() };
+    let filename = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let Some(ts) = fs::metadata(file_path).ok().and_then(|m| m.modified().ok()).map(systemtime_to_iso) else {
+        return Vec::new();
+    };
+    let mut schedule: Vec<String> = Vec::new();
+    let mut unit = String::new();
+    let mut description = String::new();
+    for line in text.lines() {
+        let t = line.trim();
+        if let Some((k, v)) = t.split_once('=') {
+            match k.trim() {
+                "OnCalendar" | "OnBootSec" | "OnStartupSec" | "OnUnitActiveSec" | "OnActiveSec" | "OnUnitInactiveSec" => {
+                    schedule.push(format!("{}={}", k.trim(), v.trim()))
+                }
+                "Unit" => unit = v.trim().to_string(),
+                "Description" => description = v.trim().to_string(),
+                _ => {}
+            }
+        }
+    }
+    if unit.is_empty() {
+        unit = format!("{}.service", filename.trim_end_matches(".timer"));
+    }
+    vec![Event {
+        timestamp: ts,
+        computer: computer_name.to_string(),
+        artifact: "linux:systemd:timer".to_string(),
+        event_id: 0,
+        pid: 0,
+        subject_username: "root".to_string(),
+        target_username: "root".to_string(),
+        processname: unit,
+        commandline: Some(format!("systemd timer {}: {} ({})", filename, schedule.join(", "), description)),
+        parentprocessname: "systemd".to_string(),
+    }]
+}
+
 /// Parses running_processes_full_paths.txt to detect deleted binaries executing in memory
 pub fn parse_running_processes_paths(file_path: &Path, computer_name: &str) -> Vec<Event> {
     let mut events = Vec::new();

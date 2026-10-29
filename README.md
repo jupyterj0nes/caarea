@@ -107,17 +107,21 @@ Every `.evtx` in a folder is parsed and filtered by provider and event id, so re
 | :--- | :--- |
 | `pacct` / `psacct` / `acct` | every terminated process: command, UID, PID, PPID, flags (`struct acct_v3` and legacy `struct acct`, both byte orders) |
 | `audit.log` | `USER_CMD` (sudo) and `execve` calls rebuilt from `SYSCALL` + `EXECVE` + `CWD` + `PROCTITLE`, hex decoded |
-| `auth.log`, `secure`, `cron`, `syslog`, `messages`, `kern.log` | cron jobs, `sudo` commands, `su` switches, kernel segfaults; classic and RFC 3339 timestamps |
-| `.bash_history`, `.zsh_history`, `.viminfo` | commands (with epoch stamps when present), files edited |
-| `dpkg.log`, UAC rpm query | package installs |
-| `/etc/crontab`, `/etc/cron.d/*`, `/var/spool/cron/**`, systemd `.service` units | scheduled jobs and services |
+| systemd journal (`/var/log/journal/**/*.journal`, `*.journal~`) | `sudo`, `su`, `pkexec` and cron command lines, units started by systemd, and the first message of every process that logged (PID and command line from the trusted fields). This is where Fedora, RHEL 8+, Arch and Debian 12 keep what `auth.log` used to hold |
+| `auth.log`, `secure`, `cron`, `syslog`, `messages`, `kern.log` | cron jobs, `sudo` commands, `su` switches, kernel segfaults; classic and RFC 3339 timestamps; rotated `.gz` and `.xz` copies are read too |
+| `.bash_history`, `.zsh_history`, `fish_history`, `.python_history`, `.mysql_history`, `.psql_history`, `.sqlite_history`, `.node_repl_history`, `.lesshst`, `.viminfo` | commands (with epoch stamps when present), files edited |
+| `dpkg.log`, `apt/history.log`, `dnf.rpm.log`, `yum.log`, `pacman.log`, `zypp/history`, UAC rpm query | package installs, and the exact `apt`, `pacman` and `zypper` command lines with the user who ran them |
+| `/etc/crontab`, `/etc/cron.d/*`, `/var/spool/cron/**`, systemd `.service` and `.timer` units, `/var/lib/systemd/timers/stamp-*` | scheduled jobs, services, timers and when each timer last fired |
+| `wtmp`, `btmp`, `utmp` | logins, logouts, boots, failed logins |
+| Docker `config.v2.json`, containerd task `config.json`, podman `containers.json` | containers created, started and finished: image, command, user, PID |
+| `cloud-init.log`, `/var/mail/*` | user-data and `runcmd` scripts run at first boot; cron job output mails with the command in the subject |
 | `recently-used.xbel` | documents opened from the desktop |
 | web server access logs | requests to server-side scripts, POSTs, command-injection payloads in the query string |
 | UAC `ps -axo ... lstart`, `running_processes_full_paths.txt` | running processes, deleted binaries still in memory, executions from `/tmp` and `/dev/shm` |
 
 ### Disk images
 
-E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or flat; Hyper-V VHD and VHDX, fixed or dynamic) are read in place, without converting or mounting. MBR and GPT partition tables, NTFS traversal, BitLocker detection. From the live volume and from **every Volume Shadow Copy**: event logs, `config` hives with their transaction logs, `Amcache.hve`, `NTUSER.DAT` and `UsrClass.dat` of every profile, Prefetch, task XML, WER reports, Defender logs, PCA logs and the PowerShell history of every profile. Shadow copies are read with [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs), pure Rust, straight from the image.
+E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or flat; Hyper-V VHD and VHDX, fixed or dynamic) are read in place, without converting or mounting. MBR and GPT partition tables, NTFS traversal, BitLocker detection. Linux images are read the same way: ext2/3/4 partitions, bare partition images and ext4 logical volumes inside LVM2 are walked with a pure-Rust reader and the files listed above (plus `/etc/hostname`, `/etc/localtime` and its symlink target) are staged with their original paths. XFS and btrfs are not read yet. From the live volume and from **every Volume Shadow Copy**: event logs, `config` hives with their transaction logs, `Amcache.hve`, `NTUSER.DAT` and `UsrClass.dat` of every profile, Prefetch, task XML, WER reports, Defender logs, PCA logs and the PowerShell history of every profile. Shadow copies are read with [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs), pure Rust, straight from the image.
 
 ---
 

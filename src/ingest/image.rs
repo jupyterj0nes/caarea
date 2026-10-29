@@ -732,7 +732,7 @@ pub fn unpack_disk_image(
 
 /// Processes a seekable disk image: locates partitions, extracts artifacts from the live volume
 /// and from every Volume Shadow Copy store. Returns the shadow copy directories with their tags.
-fn process_seekable_image<R: Read + Seek>(
+fn process_seekable_image<R: Read + Seek + 'static>(
     reader: &mut R,
     image_size: u64,
     live_dir: &Path,
@@ -741,8 +741,34 @@ fn process_seekable_image<R: Read + Seek>(
 ) -> Result<Vec<(PathBuf, Provenance)>, Box<dyn std::error::Error>> {
     let partitions = find_ntfs_partitions(reader, image_size).map_err(|e| format!("Partition scan error: {}", e))?;
 
+    // Linux file systems: ext partitions and ext4 logical volumes inside LVM
+    let linux = crate::ingest::linux_image::find_linux_partitions(reader);
+    if partitions.is_empty() && linux.ext4.is_empty() && linux.lvm.is_empty() {
+        return Err("No NTFS or ext4 partitions found in disk image (check if BitLocker or LUKS encrypted)".into());
+    }
+    let mut linux_files = 0usize;
+    for (i, &off) in linux.ext4.iter().enumerate() {
+        let dir = live_dir.join(format!("linux_partition_{}", i));
+        match crate::ingest::linux_image::extract_partition(reader, off, &dir) {
+            Ok(n) => {
+                linux_files += n;
+                log_message(silent, &format!("  ├─ ext4 partition {} at {:#x}: extracted {} Linux artifacts", i + 1, off, n));
+            }
+            Err(e) => log_message(silent, &format!("  ⚠️ ext4 partition {} at {:#x}: {}", i + 1, off, e)),
+        }
+    }
+    for (i, &off) in linux.lvm.iter().enumerate() {
+        let dir = live_dir.join(format!("lvm_{}", i));
+        let staging = live_dir.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| live_dir.to_path_buf());
+        let (volumes, n) = crate::ingest::linux_image::extract_lvm(reader, off, &dir, &staging);
+        if volumes > 0 {
+            linux_files += n;
+            log_message(silent, &format!("  ├─ LVM at {:#x}: {} ext4 logical volume(s), extracted {} Linux artifacts", off, volumes, n));
+        }
+    }
     if partitions.is_empty() {
-        return Err("No valid NTFS partitions found in disk image (check if BitLocker encrypted)".into());
+        log_message(silent, &format!("  └─ Linux image: {} artifacts staged", linux_files));
+        return Ok(Vec::new());
     }
 
     log_message(

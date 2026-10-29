@@ -1,12 +1,16 @@
 pub mod audit;
+pub mod cloudinit;
+pub mod containers;
 pub mod crash;
 pub mod histories;
+pub mod journald;
 pub mod packages;
 pub mod pacct;
 pub mod persistence;
 pub mod proc;
 pub mod syslog;
 pub mod timezone;
+pub mod utmp;
 pub mod web;
 pub mod xbel;
 
@@ -155,6 +159,48 @@ fn is_systemd_unit(path: &Path, filename: &str) -> bool {
     comps.windows(2).any(|w| w[0] == "systemd" && (w[1] == "system" || w[1] == "user"))
 }
 
+/// Inflates a `.gz` or `.xz` log into a private temporary folder, keeping the file name without
+/// the compression suffix so the usual routing applies. `None` when the format is not supported
+/// or the data is damaged. Files above 1 GB inflated are cut there.
+fn decompress_to_temp(path: &Path) -> Option<std::path::PathBuf> {
+    use std::io::Read;
+    const LIMIT: u64 = 1 << 30;
+    let name = path.file_name()?.to_string_lossy().to_string();
+    let (plain, kind) = if let Some(p) = name.strip_suffix(".gz") {
+        (p.to_string(), "gz")
+    } else if let Some(p) = name.strip_suffix(".xz") {
+        (p.to_string(), "xz")
+    } else {
+        return None;
+    };
+    let raw = fs::File::open(path).ok()?;
+    let mut out: Vec<u8> = Vec::new();
+    match kind {
+        "gz" => {
+            let dec = flate2::read::GzDecoder::new(std::io::BufReader::new(raw));
+            dec.take(LIMIT).read_to_end(&mut out).ok()?;
+        }
+        _ => {
+            let mut reader = std::io::BufReader::new(raw);
+            lzma_rs::xz_decompress(&mut reader, &mut out).ok()?;
+            out.truncate(LIMIT as usize);
+        }
+    }
+    let dir = std::env::temp_dir().join(format!("caarea_inflate_{}_{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+    fs::create_dir_all(&dir).ok()?;
+    let tmp = dir.join(plain);
+    fs::write(&tmp, out).ok()?;
+    // keep the rotated file's own time for the parsers that use it
+    if let Ok(meta) = fs::metadata(path) {
+        if let Ok(m) = meta.modified() {
+            if let Ok(f) = fs::OpenOptions::new().write(true).open(&tmp) {
+                let _ = f.set_modified(m);
+            }
+        }
+    }
+    Some(tmp)
+}
+
 /// Routes a single file to the Linux parser(s) that understand it, by file name and location.
 /// Returns an empty vector for files that are not Linux execution artifacts.
 pub fn process_linux_file(path: &Path, hostname: &str) -> Vec<Event> {
@@ -169,17 +215,63 @@ pub fn process_linux_file_tz(path: &Path, hostname: &str, tz: &HostTimezone) -> 
     };
     let compressed = filename.ends_with(".gz") || filename.ends_with(".xz") || filename.ends_with(".bz2");
 
+    // 0. Rotated logs compressed by logrotate (`auth.log.2.gz`, `audit.log.1.xz`): inflated to a
+    //    temporary copy with the plain name and routed again. bzip2 is not supported.
+    if compressed {
+        return match decompress_to_temp(path) {
+            Some(tmp) => {
+                let events = process_linux_file_tz(&tmp, hostname, tz);
+                if let Some(dir) = tmp.parent() {
+                    let _ = fs::remove_dir_all(dir);
+                }
+                events
+            }
+            None => Vec::new(),
+        };
+    }
+
+    // 0b. systemd journal files
+    if journald::is_journal_file(filename) {
+        return journald::parse_file(path, hostname);
+    }
+
+    // 0c. containers, cloud-init, cron mail spools
+    if containers::is_container_file(path, filename) {
+        return containers::parse_file(path, hostname);
+    }
+    if cloudinit::is_cloud_init_log(filename) {
+        return cloudinit::parse_cloud_init_log(path, hostname, tz);
+    }
+    if cloudinit::is_mail_spool(path) {
+        return cloudinit::parse_mail_spool(path, hostname);
+    }
+
     // 1. Process startup / running state
     if filename == "ps_-axo_pid_user_lstart_args.txt" {
         return proc::parse_ps_lstart_file(path, hostname, tz);
     }
 
     // 2. Shell and Editor histories
-    if filename == ".bash_history" || filename == ".sh_history" || filename == ".ash_history" || filename == ".history" {
+    if filename == ".bash_history"
+        || filename == ".sh_history"
+        || filename == ".ash_history"
+        || filename == ".history"
+        || filename == ".python_history"
+        || filename == ".mysql_history"
+        || filename == ".psql_history"
+        || filename == ".sqlite_history"
+        || filename == ".node_repl_history"
+        || filename == ".irb_history"
+        || filename == ".rediscli_history"
+        || filename == ".lesshst"
+    {
         return histories::parse_bash_history(path, hostname);
     }
     if filename == ".zsh_history" {
         return histories::parse_zsh_history(path, hostname);
+    }
+    if filename == "fish_history" {
+        return histories::parse_fish_history(path, hostname);
     }
     if filename == ".viminfo" {
         return histories::parse_viminfo(path, hostname);
@@ -240,6 +332,31 @@ pub fn process_linux_file_tz(path: &Path, hostname: &str, tz: &HostTimezone) -> 
     }
     if filename == "dpkg.log" || filename.starts_with("dpkg.log.") {
         return if compressed { Vec::new() } else { packages::parse_dpkg_log(path, hostname, tz) };
+    }
+    if (filename == "history.log" || filename.starts_with("history.log.")) && lower_components(path).iter().any(|c| c == "apt") {
+        return packages::parse_apt_history(path, hostname, tz);
+    }
+    if filename == "pacman.log" || filename.starts_with("pacman.log.") {
+        return packages::parse_pacman_log(path, hostname);
+    }
+    if filename == "dnf.rpm.log" || filename.starts_with("dnf.rpm.log.") || filename == "yum.log" || filename.starts_with("yum.log.") {
+        return packages::parse_rpm_log(path, hostname, tz);
+    }
+    if filename == "history" && lower_components(path).iter().any(|c| c == "zypp") {
+        return packages::parse_zypp_history(path, hostname, tz);
+    }
+
+    // 9b. Login records
+    if utmp::is_utmp_file(filename) {
+        return utmp::parse_file(path, hostname);
+    }
+
+    // 9c. systemd timers: last trigger stamp files and timer units
+    if filename.starts_with("stamp-") && filename.ends_with(".timer") {
+        return persistence::parse_timer_stamp(path, hostname);
+    }
+    if filename.ends_with(".timer") && lower_components(path).windows(2).any(|w| w[0] == "systemd" && (w[1] == "system" || w[1] == "user")) {
+        return persistence::parse_timer_unit(path, hostname);
     }
 
     // 10. Scheduled Cron Jobs (etc/crontab, etc/cron.d/*, var/spool/cron/*)

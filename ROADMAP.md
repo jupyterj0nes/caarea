@@ -1,5 +1,16 @@
 # CAAREA roadmap: missing execution artifacts and carving
 
+Status (2026-10-28): phases 0 to 5 shipped (commits 7596fb7, 201143d), plus a live-volume
+mode (`-f \\.\C:`) and `--stage-dir` that were not in the plan. Phase 6 (Linux) done:
+ext4/LVM image reader, journald, apt/dnf/pacman/zypper, utmp, timers, containers, cloud-init,
+cron mail, fish and REPL histories, `.gz`/`.xz` rotated logs, audit `SERVICE_START`/`USER_START`/
+`ANOM_ABEND`/`AVC`, live Linux devices (`caarea -f /dev/sda1`). Validated live on LEO-LNX01
+(Ubuntu 22.04): 88 artifacts staged from the ext4 root device, 22 artifact classes, 9684 rows;
+auditd execve PIDs match pacct records for the same commands. Still pending from phase 6: WSL
+`ext4.vhdx` inside a Windows image (needs a reader-based VHDX open). Phases 7 to 10 not started.
+Lab notes: Windows Server does not write Prefetch even with `EnablePrefetcher=3`; the GCE VMDK
+export needs a free instance slot in the region (the kept jumpbox fills the quota of 8).
+
 Working plan, October 2026. Each phase ships on its own (tests, README, commit, push)
 and leaves `main` usable. Order is by execution events recovered per day of work;
 every live parser added in phases 1 to 6 is also what phases 7 to 9 carve.

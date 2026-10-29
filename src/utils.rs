@@ -41,6 +41,12 @@ pub fn parse_flexible_time(s: &str) -> Option<DateTime<Utc>> {
     if let Ok(dt) = DateTime::parse_from_rfc3339(&t2) {
         return Some(dt.with_timezone(&Utc));
     }
+    // numeric offsets without a colon (`+0000`), as pacman and dnf write them
+    for fmt in ["%Y-%m-%dT%H:%M:%S%.f%z", "%Y-%m-%dT%H:%M:%S%z"] {
+        if let Ok(dt) = DateTime::parse_from_str(&t2, fmt) {
+            return Some(dt.with_timezone(&Utc));
+        }
+    }
     let bare = t2.trim_end_matches('Z');
     for fmt in ["%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H"] {
         if let Ok(ndt) = NaiveDateTime::parse_from_str(bare, fmt) {

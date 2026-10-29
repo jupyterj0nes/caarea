@@ -236,6 +236,77 @@ pub fn parse_audit_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
                     parentprocessname: "sudo/pam".to_string(),
                 });
             }
+            // Units started or stopped by systemd, user sessions, abnormal ends, denials
+            "SERVICE_START" | "SERVICE_STOP" | "USER_START" | "USER_END" | "ANOM_ABEND" | "AVC" => {
+                let pairs = audit_pairs(&line);
+                let Some(iso_ts) = epoch_to_iso(secs, msecs * 1_000_000) else { continue };
+                let pid: u32 = audit_field(&pairs, "pid").and_then(|v| v.parse().ok()).unwrap_or(0);
+                let user_label = resolve_user(&pairs);
+                let exe = audit_field(&pairs, "exe").unwrap_or("").to_string();
+                let comm = audit_field(&pairs, "comm").map(|c| decode_audit_value(c, true)).unwrap_or_default();
+                let (artifact, proc_name, details, parent) = match rec_type {
+                    "SERVICE_START" | "SERVICE_STOP" => {
+                        let unit = audit_field(&pairs, "unit").unwrap_or("?").to_string();
+                        let res = audit_field(&pairs, "res").unwrap_or("?");
+                        (
+                            if rec_type == "SERVICE_START" { "linux:audit:service_start" } else { "linux:audit:service_stop" },
+                            unit.clone(),
+                            format!("systemd unit {} ({}): {}", if rec_type == "SERVICE_START" { "started" } else { "stopped" }, res, unit),
+                            "systemd".to_string(),
+                        )
+                    }
+                    "USER_START" | "USER_END" => {
+                        let acct = audit_field(&pairs, "acct").map(|a| decode_audit_value(a, true)).unwrap_or_else(|| user_label.clone());
+                        let terminal = audit_field(&pairs, "terminal").unwrap_or("?");
+                        let addr = audit_field(&pairs, "addr").unwrap_or("?");
+                        if exe.is_empty() && comm.is_empty() {
+                            continue;
+                        }
+                        (
+                            if rec_type == "USER_START" { "linux:audit:session_start" } else { "linux:audit:session_end" },
+                            exe.clone(),
+                            format!("Session {} for {} on {} from {} via {}", if rec_type == "USER_START" { "opened" } else { "closed" }, acct, terminal, addr, exe),
+                            "pam".to_string(),
+                        )
+                    }
+                    "ANOM_ABEND" => {
+                        let sig = audit_field(&pairs, "sig").unwrap_or("?");
+                        (
+                            "linux:audit:abend",
+                            if exe.is_empty() { comm.clone() } else { exe.clone() },
+                            format!("Process ended abnormally (signal {}): {} ({})", sig, exe, comm),
+                            "kernel".to_string(),
+                        )
+                    }
+                    _ => {
+                        // AVC: `avc:  denied  { execute } for  pid=1234 comm="x" path="/tmp/x" ...`
+                        let perm = line.split('{').nth(1).and_then(|s| s.split('}').next()).unwrap_or("?").trim().to_string();
+                        let path = audit_field(&pairs, "path").or_else(|| audit_field(&pairs, "name")).map(|p| decode_audit_value(p, true)).unwrap_or_default();
+                        let denied = line.contains("denied");
+                        if !denied || !matches!(perm.as_str(), "execute" | "execute_no_trans" | "execmem" | "execmod" | "entrypoint" | "transition") {
+                            continue;
+                        }
+                        (
+                            "linux:audit:avc_denied",
+                            if path.is_empty() { comm.clone() } else { path.clone() },
+                            format!("SELinux denied {} for {} ({})", perm, comm, path),
+                            "kernel/selinux".to_string(),
+                        )
+                    }
+                };
+                events.push(Event {
+                    timestamp: iso_ts,
+                    computer: computer_name.to_string(),
+                    artifact: artifact.to_string(),
+                    event_id: 0,
+                    pid,
+                    subject_username: user_label.clone(),
+                    target_username: user_label,
+                    processname: proc_name,
+                    commandline: Some(details),
+                    parentprocessname: parent,
+                });
+            }
             "SYSCALL" => {
                 let pairs = audit_pairs(&line);
                 if !is_execve_syscall(&pairs) {

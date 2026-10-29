@@ -87,6 +87,42 @@ pub fn parse_bash_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
     events
 }
 
+/// Parses fish's `fish_history` (YAML-like): `- cmd: <command>` followed by `  when: <epoch>`.
+pub fn parse_fish_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
+    let Ok(text) = fs::read_to_string(file_path) else { return Vec::new() };
+    let user = infer_user_from_history_path(file_path);
+    let mut events = Vec::new();
+    let mut cmd: Option<String> = None;
+    let flush = |cmd: &mut Option<String>, epoch: Option<i64>, events: &mut Vec<Event>| {
+        if let (Some(c), Some(e)) = (cmd.take(), epoch) {
+            if let Some(ts) = epoch_to_iso(e, 0) {
+                events.push(Event {
+                    timestamp: ts,
+                    computer: computer_name.to_string(),
+                    artifact: "linux:shell:fish_history".to_string(),
+                    event_id: 0,
+                    pid: 0,
+                    subject_username: user.clone(),
+                    target_username: user.clone(),
+                    processname: c.split_whitespace().next().unwrap_or("").to_string(),
+                    commandline: Some(c),
+                    parentprocessname: "fish".to_string(),
+                });
+            }
+        }
+    };
+    for line in text.lines() {
+        if let Some(c) = line.strip_prefix("- cmd: ") {
+            flush(&mut cmd, None, &mut events);
+            cmd = Some(c.trim().to_string());
+        } else if let Some(w) = line.trim().strip_prefix("when: ") {
+            let epoch = w.trim().parse::<i64>().ok();
+            flush(&mut cmd, epoch, &mut events);
+        }
+    }
+    events
+}
+
 /// Parses .zsh_history with format: : <epoch>:<duration>;<command>
 pub fn parse_zsh_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
     let mut events = Vec::new();
