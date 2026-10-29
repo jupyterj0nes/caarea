@@ -40,7 +40,16 @@ database (`datasets/public/timeline`, opened and focus rows), because neither Wi
 nor Server 2022 record user activities any more. The lab's Server 2022 SRUM has neither
 the app timeline table nor the network data usage table; the per-interface SDP tables are
 left out on purpose. `RecentFileCache.bcf` and `Syscache.hve` have unit tests only (no
-Windows 7 host in the lab). Phase 10 not started.
+Windows 7 host in the lab).
+Phase 10 done: the `blockcarve` crate (`D:\c00pr\tools\blockcarve`, AGPL-3.0, path
+dependency until published) holds the sources, the scanner (`scan_many` with the block
+callback), the hive-bin chain reader, EVTX chunk checksums and synthetic files with
+bisection against a caller-supplied validator, `FILE`/`INDX` validators (feature `mft`),
+Prefetch and journal headers. caarea, faramir (with a diagnostics-recording wrapper so its
+error codes survive), allymacb (its block loop replaced by the shared scanner, text carving
+holding back the last 8 KB of every block) and masstin (EWF through the guarded source,
+`--skip-offsets` as a zero-serving source wrapper, CRC gate before the provider peek) all
+build and pass their suites on it.
 Lab notes: Windows Server does not write Prefetch even with `EnablePrefetcher=3`; the GCE VMDK
 export needs a free instance slot in the region (the kept jumpbox fills the quota of 8).
 

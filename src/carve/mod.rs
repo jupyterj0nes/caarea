@@ -1,12 +1,13 @@
 //! Carving engine: read raw bytes (disk images, live volumes, pagefiles, memory dumps, any
 //! blob) and find self-describing structures that no file system points to any more.
 //!
-//! The block scanner ([`scan`]) and the guarded block sources ([`source`]) are the design
-//! shared by masstin's EVTX carver, faramir's registry carver and allymacb's NTFS carver:
-//! 4 MB blocks, sector-aligned signatures, a carry-over tail so a structure split between two
-//! reads is seen whole, and reads that cannot hang the run. Validators live in one module per
-//! structure and only accept what proves itself: hive bin chains and root key, EVTX chunks
-//! that parse, NTFS fixup arrays, journal records with coherent lengths and times.
+//! The block scanner, the guarded block sources and the structural validators come from the
+//! `blockcarve` crate shared with masstin's EVTX carver, faramir's registry carver and
+//! allymacb's NTFS carver: 4 MB blocks, sector-aligned signatures, a carry-over tail so a
+//! structure split between two reads is seen whole, and reads that cannot hang the run. Only
+//! what proves itself is accepted: hive bin chains and root key, EVTX chunk checksums, NTFS
+//! fixup arrays, journal records with coherent lengths and times. What becomes a row, and
+//! how it is tagged, is decided here.
 //!
 //! Carving is opt-in (`--carve`). Whole hives and EVTX chunks are written to the staging
 //! folder and go through the normal parsers; small structures (MFT records, index entries,
@@ -15,17 +16,17 @@
 //! container's name.
 
 pub mod evtx;
-pub mod hive;
+pub use blockcarve::hive;
 pub mod linux;
 pub mod ntfs;
-pub mod scan;
-pub mod source;
+pub use blockcarve::scan;
+pub use blockcarve::source;
 
-pub use scan::{scan_signatures, HitAction, ScanConfig, ScanStats};
-pub use source::{BlockError, BlockSource, DirectSource, GuardedSource, MemorySource};
+pub use blockcarve::scan::{scan_signatures, HitAction, ScanConfig, ScanStats};
+pub use blockcarve::source::{BlockError, BlockSource, DirectSource, GuardedSource, MemorySource, SourceReader};
 
 use std::collections::HashSet;
-use std::io::{Read, Seek, SeekFrom};
+
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -68,45 +69,7 @@ pub fn open_source(path: &Path) -> Result<Box<dyn BlockSource>, String> {
         let (reader, size) = crate::ingest::vhd::open_virtual_disk(&label).map_err(fail)?;
         return Ok(Box::new(DirectSource::new(reader, size, label)));
     }
-    let file = std::fs::File::open(path).map_err(|e| fail(e.to_string()))?;
-    let size = file.metadata().map_err(|e| fail(e.to_string()))?.len();
-    if size == 0 {
-        return Err(fail("empty file".to_string()));
-    }
-    Ok(Box::new(DirectSource::new(std::io::BufReader::new(file), size, label)))
-}
-
-/// `Read + Seek` over a block source, for the NTFS reader used to reach pagefiles.
-struct SourceReader<'a> {
-    src: &'a mut dyn BlockSource,
-    pos: u64,
-    base: u64,
-}
-
-impl Read for SourceReader<'_> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let data = self.src.read_block(self.base + self.pos, buf.len()).map_err(|e| std::io::Error::other(e.to_string()))?;
-        let n = data.len().min(buf.len());
-        buf[..n].copy_from_slice(&data[..n]);
-        self.pos += n as u64;
-        Ok(n)
-    }
-}
-
-impl Seek for SourceReader<'_> {
-    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        let size = self.src.size().saturating_sub(self.base);
-        let new = match pos {
-            SeekFrom::Start(p) => p as i128,
-            SeekFrom::End(d) => size as i128 + d as i128,
-            SeekFrom::Current(d) => self.pos as i128 + d as i128,
-        };
-        if new < 0 {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "seek before start"));
-        }
-        self.pos = new as u64;
-        Ok(self.pos)
-    }
+    blockcarve::source::open_file(path)
 }
 
 #[derive(Debug, Default, Clone)]
@@ -229,7 +192,7 @@ pub fn carve_source(
     let source_name = container.map(|c| c.to_string()).unwrap_or_else(|| Path::new(&label).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(label.clone()));
     let mut out = CarveOutput::default();
     let mut seen_hives: HashSet<String> = HashSet::new();
-    let mut groups = evtx::ChunkGroups { seen_hashes: known_chunks.clone(), ..Default::default() };
+    let mut groups = evtx::ChunkGroups::with_known(known_chunks);
     // ranges of chunks accepted so far: records inside them are not orphans
     let chunk_ranges: std::cell::RefCell<Vec<(u64, u64)>> = std::cell::RefCell::new(Vec::new());
     let in_container = container.is_some();
@@ -284,7 +247,7 @@ pub fn carve_source(
                 }
                 let chunk = window[..evtx::CHUNK_SIZE].to_vec();
                 // a chunk identical to one of an extracted EVTX is the live log itself
-                if known_chunks.contains(&hive::content_hash(&chunk)) {
+                if known_chunks.contains(&blockcarve::content_hash(&chunk)) {
                     chunk_ranges.borrow_mut().push((offset, offset + evtx::CHUNK_SIZE as u64));
                     return HitAction::SkipTo(offset + evtx::CHUNK_SIZE as u64);
                 }
@@ -304,7 +267,7 @@ pub fn carve_source(
                 Some(size) => {
                     // on the disk itself an allocated record is the live $MFT (already parsed);
                     // only freed records, or any record inside a pagefile or blob, are news
-                    let allocated = window[22] & 0x01 != 0;
+                    let allocated = blockcarve::ntfs::file_record_allocated(window);
                     if allocated && !in_container {
                         return HitAction::SkipTo(offset + size as u64);
                     }
@@ -493,11 +456,11 @@ pub fn carve_source(
 /// and hiberfil of every NTFS partition (allocated files the file-system pass never parses).
 pub fn carve_image(image_path: &Path, out_dir: &Path, extracted_root: Option<&Path>, computer: &str, silent: bool) -> Result<CarveOutput, String> {
     let mut src = open_source(image_path)?;
-    let known = extracted_root.map(hive::fingerprints_under).unwrap_or_default();
+    let known = extracted_root.map(|r| hive::fingerprints_under(r, &|_| false)).unwrap_or_default();
     let known_chunks = extracted_root.map(evtx::chunk_hashes_under).unwrap_or_default();
     let size = src.size();
     let (partitions, linux) = {
-        let mut reader = SourceReader { src: &mut *src, pos: 0, base: 0 };
+        let mut reader = SourceReader::new(&mut *src, 0);
         let ntfs_parts = crate::ingest::image::find_ntfs_partitions(&mut reader, size).unwrap_or_default();
         let lp = crate::ingest::linux_image::find_linux_partitions(&mut reader);
         let linux = !lp.ext4.is_empty() || !lp.lvm.is_empty() || ntfs_parts.is_empty();
@@ -547,7 +510,7 @@ fn carve_ntfs_file(
     computer: &str,
     silent: bool,
 ) -> Result<Option<CarveOutput>, String> {
-    let mut reader = SourceReader { src, pos: 0, base: part_offset };
+    let mut reader = SourceReader::new(src, part_offset);
     let out = ntfs::with_root_file(&mut reader, name, |data, size| {
         if size == 0 {
             return None;

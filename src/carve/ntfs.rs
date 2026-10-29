@@ -3,10 +3,6 @@
 //! their slack) and `USN_RECORD_V2/V3` journal records. The validators are allymacb's; what
 //! becomes a row follows caarea's execution rules.
 
-use std::io::Cursor;
-
-use mft::attribute::x30::FileNameAttr;
-
 use crate::parsers::evtx::Event;
 use crate::parsers::ntfs::usn::{classify, parse_record, UsnRecord};
 use crate::parsers::ntfs::{extension, is_evidence_file, EXEC_EXTENSIONS};
@@ -48,40 +44,8 @@ pub fn with_root_file<R: std::io::Read + std::io::Seek, T>(
     Ok(Some(f(&mut attached, size)))
 }
 
-pub const FILE_MAGIC: &[u8; 4] = b"FILE";
-pub const INDX_MAGIC: &[u8; 4] = b"INDX";
-const VALID_ENTRY_SIZES: [u32; 2] = [1024, 4096];
-const FILETIME_2000: u64 = 125_911_584_000_000_000;
-const FILETIME_2040: u64 = 138_535_776_000_000_000;
-
-/// Size of a valid `FILE` record at the start of `buf` (header geometry and fixups checked).
-pub fn file_record_size(buf: &[u8]) -> Option<usize> {
-    if buf.len() < 48 || &buf[0..4] != FILE_MAGIC {
-        return None;
-    }
-    let usa_offset = u16::from_le_bytes([buf[4], buf[5]]) as usize;
-    let usa_count = u16::from_le_bytes([buf[6], buf[7]]) as usize;
-    let first_attr = u16::from_le_bytes([buf[20], buf[21]]) as usize;
-    let used = u32::from_le_bytes(buf[24..28].try_into().unwrap()) as usize;
-    let total = u32::from_le_bytes(buf[28..32].try_into().unwrap());
-    if !VALID_ENTRY_SIZES.contains(&total) {
-        return None;
-    }
-    let size = total as usize;
-    if buf.len() < size || usa_count != size / 512 + 1 {
-        return None;
-    }
-    if usa_offset < 0x2A || usa_offset + usa_count * 2 > first_attr || first_attr + 8 > size || used > size || used < first_attr {
-        return None;
-    }
-    let usn = &buf[usa_offset..usa_offset + 2];
-    for i in 1..usa_count {
-        if &buf[i * 512 - 2..i * 512] != usn {
-            return None;
-        }
-    }
-    Some(size)
-}
+pub use blockcarve::ntfs::{file_record_size, parse_indx_block, IndxEntry, FILE_MAGIC, INDX_MAGIC};
+use blockcarve::{FILETIME_2000, FILETIME_2040};
 
 /// Names worth a row when the folder is unknown: forensic files always, executables and
 /// scripts except the library and package types that churn with updates.
@@ -99,118 +63,6 @@ pub fn interesting_name(name: &str) -> bool {
 pub fn file_record_events(raw: &[u8], computer: &str, source: &str) -> Vec<Event> {
     let Some(size) = file_record_size(raw) else { return Vec::new() };
     crate::parsers::ntfs::mft::standalone_record_events(&raw[..size], computer, source)
-}
-
-/// One parsed `$I30` entry.
-pub struct IndxEntry {
-    pub file_ref: u64,
-    pub in_slack: bool,
-    pub fname: FileNameAttr,
-}
-
-fn entry_header(block: &[u8], pos: usize) -> (usize, u32) {
-    let len = u16::from_le_bytes([block[pos + 8], block[pos + 9]]) as usize;
-    let flags = u32::from_le_bytes(block[pos + 12..pos + 16].try_into().unwrap_or([0; 4]));
-    (len, flags)
-}
-
-fn try_entry(block: &[u8], pos: usize, strict: bool) -> Option<IndxEntry> {
-    if pos + 0x58 > block.len() {
-        return None;
-    }
-    let file_ref = u64::from_le_bytes(block[pos..pos + 8].try_into().ok()?);
-    let (len, flags) = entry_header(block, pos);
-    let fn_len = u16::from_le_bytes([block[pos + 10], block[pos + 11]]) as usize;
-    let fn_start = pos + 16;
-    if fn_len < 0x44 || fn_start + fn_len > block.len() || len < 16 + fn_len {
-        return None;
-    }
-    let name_len = block[fn_start + 0x40] as usize;
-    let namespace = block[fn_start + 0x41];
-    if name_len == 0 || namespace > 3 || fn_len != 0x42 + 2 * name_len {
-        return None;
-    }
-    if strict {
-        let expected = (16 + fn_len + 7) & !7;
-        let expected = if flags & 0x01 != 0 { expected + 8 } else { expected };
-        if len != expected || flags & !0x03 != 0 {
-            return None;
-        }
-        for i in 0..4 {
-            let t = u64::from_le_bytes(block[fn_start + 8 + i * 8..fn_start + 16 + i * 8].try_into().ok()?);
-            if t >= 1 << 63 || (t != 0 && !(FILETIME_2000..FILETIME_2040).contains(&t)) {
-                return None;
-            }
-        }
-    }
-    let fname = FileNameAttr::from_stream(&mut Cursor::new(&block[fn_start..fn_start + fn_len])).ok()?;
-    if fname.name.chars().any(|c| c.is_control() || c == '\\' || c == '/') {
-        return None;
-    }
-    Some(IndxEntry { file_ref, in_slack: strict, fname })
-}
-
-/// Validates an `INDX` block at the start of `buf`, applies its fixups and returns its size
-/// with every entry of the live chain and of the slack.
-pub fn parse_indx_block(buf: &[u8]) -> Option<(usize, Vec<IndxEntry>)> {
-    if buf.len() < 0x58 || &buf[0..4] != INDX_MAGIC {
-        return None;
-    }
-    let usa_offset = u16::from_le_bytes([buf[4], buf[5]]) as usize;
-    let usa_count = u16::from_le_bytes([buf[6], buf[7]]) as usize;
-    if !(3..=129).contains(&usa_count) {
-        return None;
-    }
-    let size = (usa_count - 1) * 512;
-    if buf.len() < size || usa_offset < 0x28 || usa_offset + usa_count * 2 > size {
-        return None;
-    }
-    let entries_offset = u32::from_le_bytes(buf[24..28].try_into().ok()?) as usize;
-    let index_size = u32::from_le_bytes(buf[28..32].try_into().ok()?) as usize;
-    let alloc_size = u32::from_le_bytes(buf[32..36].try_into().ok()?) as usize;
-    if entries_offset < 0x10 || 24 + alloc_size > size || index_size > alloc_size || entries_offset > index_size {
-        return None;
-    }
-    if usa_offset + usa_count * 2 > 24 + entries_offset {
-        return None;
-    }
-    let mut block = buf[..size].to_vec();
-    let usn = [block[usa_offset], block[usa_offset + 1]];
-    for i in 1..usa_count {
-        let end = i * 512;
-        if block[end - 2..end] != usn {
-            return None;
-        }
-        let fix = usa_offset + i * 2;
-        block[end - 2] = block[fix];
-        block[end - 1] = block[fix + 1];
-    }
-    let mut out = Vec::new();
-    let live_end = 24 + index_size;
-    let block_end = 24 + alloc_size;
-    let mut pos = 24 + entries_offset;
-    while pos + 16 <= live_end {
-        let (len, flags) = entry_header(&block, pos);
-        if flags & 0x02 != 0 || len < 16 || !len.is_multiple_of(8) || pos + len > live_end {
-            break;
-        }
-        if let Some(e) = try_entry(&block, pos, false) {
-            out.push(e);
-        }
-        pos += len;
-    }
-    let mut pos = (live_end + 7) & !7;
-    while pos + 0x58 <= block_end {
-        match try_entry(&block, pos, true) {
-            Some(e) => {
-                let (len, _) = entry_header(&block, pos);
-                out.push(e);
-                pos += len.max(8);
-            }
-            None => pos += 8,
-        }
-    }
-    Some((size, out))
 }
 
 /// Rows for the slack entries of an `INDX` block: children a directory no longer lists.

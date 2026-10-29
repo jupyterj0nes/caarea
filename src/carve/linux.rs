@@ -10,23 +10,9 @@ use std::path::{Path, PathBuf};
 use crate::parsers::evtx::Event;
 use crate::parsers::linux::{pacct, utmp};
 
-pub const JOURNAL_MAGIC: &[u8; 8] = b"LPKSHHRH";
-const JOURNAL_MAX: u64 = 4 << 30;
+pub use blockcarve::linux::{journal_size, JOURNAL_MAGIC};
 const AUDIT_NEEDLE: &[u8] = b" msg=audit(";
 const MAX_LINE: usize = 8192;
-
-/// Size of a journal file from its header (`header_size + arena_size`), when plausible.
-pub fn journal_size(buf: &[u8]) -> Option<u64> {
-    if buf.len() < 0x68 || !buf.starts_with(JOURNAL_MAGIC) {
-        return None;
-    }
-    let header_size = u64::from_le_bytes(buf[0x58..0x60].try_into().unwrap());
-    let arena_size = u64::from_le_bytes(buf[0x60..0x68].try_into().unwrap());
-    if !(0xf0..=4096).contains(&header_size) || arena_size == 0 || arena_size > JOURNAL_MAX {
-        return None;
-    }
-    Some(header_size + arena_size)
-}
 
 /// Text lines collected by the block scanner, written out once as files the Linux parsers
 /// read: audit records keep their own time; history commands take the `#epoch` before them.
@@ -65,7 +51,7 @@ fn run_start(block: &[u8], pos: usize, max_back: usize) -> usize {
 }
 
 fn hash(bytes: &[u8]) -> u64 {
-    super::hive::content_hash(bytes)
+    blockcarve::content_hash(bytes)
 }
 
 impl TextCarve {

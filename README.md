@@ -155,6 +155,8 @@ Linux structures are looked for in images with ext4 or LVM partitions and in blo
 
 Rows from carving carry the `carved` origin with the byte offset, and the container when it is not the disk itself: `evtx:4688:carved [@0x1c3f80000]`, `prefetch:carved [pagefile @0x4f000]`. A carved row identical to a live one is dropped by the usual deduplication. Carving only recovers structures that carry their own time; it never guesses a timestamp.
 
+The scanner, the guarded sources and the structural validators are the [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate, shared with masstin, faramir and allymacb, so the four tools read raw bytes the same way and accept a structure for the same reasons.
+
 ---
 
 ## Time zones, honestly
