@@ -31,7 +31,7 @@ lnk-core = "0.4"
 mbrman = "0.6"
 vshadow = "0.2"
 regex = "1.10"
-blockcarve = "0.1"
+blockcarve = "0.1.2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 
 [profile.release]

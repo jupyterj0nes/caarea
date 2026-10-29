@@ -207,7 +207,7 @@ caarea [OPTIONS] --output <PATH>
 Beyond the unit tests, the parsers were checked against:
 
 - 524 public EVTX samples ([EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES), [EVTX-to-MITRE-Attack](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack), DeepBlueCLI): the count per file matches `Get-WinEvent` exactly for every supported event id.
-- The registry test corpus of [yarp](https://github.com/msuhanov/yarp): set `CAAREA_YARP_HIVES=<path>/hives_for_tests` and the test suite compares the replayed dirty hives with the copies recovered by Windows 10 and Windows 7.
+- The registry test corpus of [yarp](https://github.com/msuhanov/yarp): the transaction log replay (in the shared [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate, `hive_logs`) gives the same hive bins as Windows 10 and Windows 7 when they recovered those dirty hives themselves; set `BLOCKCARVE_YARP_HIVES=<path>/hives_for_tests` for blockcarve's test suite.
 - Real `pacct` files, Ubuntu 24.04 logs, an NTFS volume image produced on a Linux box and a 50 GB Windows workstation VMDK (dirty SYSTEM, SOFTWARE, DEFAULT and Amcache hives replayed from their logs).
 
 The TaskScheduler operational channel is off by default on Windows clients and no public corpus has it. `scripts\gen_taskscheduler_sample.ps1` turns it on (one UAC prompt), creates and runs a harmless task, exports the channel and runs CAAREA on it.
