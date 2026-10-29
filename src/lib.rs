@@ -145,7 +145,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     // Prepare evidence targets (unpacking triage archives, ZIP, TAR.GZ, disk images if present)
     let stage_dir = matches.get_one::<String>("stage_dir").map(std::path::PathBuf::from);
-    let workspace = ingest::prepare_evidence(directories.as_deref(), files.as_deref(), silent, stage_dir.as_deref())?;
+    let carve = matches.get_flag("carve");
+    let workspace = ingest::prepare_evidence(directories.as_deref(), files.as_deref(), silent, stage_dir.as_deref(), carve)?;
 
     let run_evtx = modules == "evtx" || modules == "all";
     let run_registry = modules == "registry" || modules == "all";
@@ -236,6 +237,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             log_message(silent, &format!("⚠️ File is neither EVTX nor a registry hive, skipped: {}", path.display()));
         }
     }
+
+    // Rows produced by ingestion itself (carved records)
+    all_events.extend(workspace.events.iter().cloned());
 
     // Remove exact duplicates (same artifact collected twice)
     let removed = dedup_events(&mut all_events);

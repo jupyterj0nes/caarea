@@ -83,8 +83,11 @@ pub fn scan_signatures(
     on_hit: &mut HitFn<'_>,
     progress: &mut ProgressFn<'_>,
 ) -> ScanStats {
-    scan_many(src, cfg, &[signature], &mut |s, off, bytes, _which| on_hit(s, off, bytes), progress)
+    scan_many(src, cfg, &[signature], &mut |s, off, bytes, _which| on_hit(s, off, bytes), progress, None)
 }
+
+/// Block callback: `(absolute offset of the block, the block's bytes)`, without the carry.
+pub type BlockFn<'a> = dyn FnMut(u64, &[u8]) + 'a;
 
 /// Visits every occurrence of any of `signatures` aligned to `cfg.step`; the callback also
 /// receives the index of the signature that matched. One pass over the source serves every
@@ -95,6 +98,7 @@ pub fn scan_many(
     signatures: &[&[u8]],
     on_hit: &mut MultiHitFn<'_>,
     progress: &mut ProgressFn<'_>,
+    mut on_block: Option<&mut BlockFn<'_>>,
 ) -> ScanStats {
     let mut stats = ScanStats::default();
     let size = src.size();
@@ -182,6 +186,12 @@ pub fn scan_many(
                     stats.signatures += 1;
                     match on_hit(src, abs, &buf[pos..], which) {
                         HitAction::Continue => {}
+                        HitAction::SkipTo(t) if t > abs && t < end_abs => {
+                            // still inside the buffer: jump within it instead of re-reading
+                            let rel = (t - base) as usize;
+                            pos = rel.div_ceil(step as usize) * step as usize;
+                            continue;
+                        }
                         HitAction::SkipTo(t) if t > abs => {
                             skip_to = Some(t);
                             break;
@@ -191,6 +201,16 @@ pub fn scan_many(
                 }
             }
             pos += step as usize;
+        }
+
+        // The block callback runs after the signature pass over the same bytes, so structures
+        // the pass accepted are known (a record inside a recovered chunk is not an orphan).
+        // The tail that becomes the next carry is left out: its signatures are only handled
+        // in the next iteration, and the callback sees those bytes then. Every byte is thus
+        // offered exactly once, and structures cut by a block boundary are seen whole.
+        if let Some(cb) = on_block.as_mut() {
+            let end = if at_eof || skip_to.is_some() { buf.len() } else { buf.len() - window.min(buf.len()) };
+            cb(base, &buf[..end]);
         }
 
         if let Some(t) = skip_to {
@@ -276,10 +296,12 @@ mod tests {
         let mut src = MemorySource::from_bytes(data, "t");
         let cfg = ScanConfig { block_size: 4096, window: 16, step: 512 };
         let mut seen = Vec::new();
+        let mut blocks = 0usize;
         scan_many(&mut src, &cfg, &[b"AAAA", b"BB"], &mut |_, off, _, which| {
             seen.push((off, which));
             HitAction::Continue
-        }, &mut |_, _| {});
+        }, &mut |_, _| {}, Some(&mut |_base, _block| blocks += 1));
+        assert_eq!(blocks, 2);
         assert_eq!(seen, vec![(0, 0), (1024, 1), (2048, 0)]);
     }
 

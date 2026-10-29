@@ -76,6 +76,12 @@ pub fn build_cli() -> Command {
                 .help("Time zone of the Linux host(s) for zone-less logs (classic syslog, dpkg, ps): IANA name, UTC or ±HH:MM. Default: detected from /etc/timezone, /etc/localtime, timedatectl or date output"),
         )
         .arg(
+            Arg::new("carve")
+                .long("carve")
+                .help("Also scan the raw bytes of every disk image or live volume (and of any -f file that is not a known artifact: pagefile, memory dump, unallocated dump) for registry hives, EVTX chunks, MFT records, index entries, journal records and Prefetch files that no file system points to. Reads the whole image; rows carry the carved origin and the byte offset")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("stage_dir")
                 .long("stage-dir")
                 .value_name("PATH")

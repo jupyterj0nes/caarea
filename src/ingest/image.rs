@@ -121,7 +121,7 @@ fn verify_bitlocker_signature<R: Read + Seek>(reader: &mut R, offset: u64) -> bo
 }
 
 /// Locates NTFS partitions by parsing MBR, GPT, and checking common volume offsets
-fn find_ntfs_partitions<R: Read + Seek>(reader: &mut R, image_size: u64) -> Result<Vec<u64>, String> {
+pub(crate) fn find_ntfs_partitions<R: Read + Seek>(reader: &mut R, image_size: u64) -> Result<Vec<u64>, String> {
     let mut partitions = Vec::new();
 
     if reader.seek(SeekFrom::Start(0)).is_err() {

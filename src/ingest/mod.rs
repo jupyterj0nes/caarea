@@ -35,6 +35,8 @@ pub struct EvidenceWorkspace {
     /// Provenance of directories that are not the live evidence (Volume Shadow Copies,
     /// recovered or carved material), keyed by extracted directory
     pub origins: HashMap<String, Provenance>,
+    /// Rows produced during ingestion itself (carved structures that are not files)
+    pub events: Vec<crate::parsers::evtx::Event>,
     temp_dir: Option<PathBuf>,
 }
 
@@ -74,13 +76,16 @@ pub fn prepare_evidence(
     raw_files: Option<&[String]>,
     silent: bool,
     stage_dir: Option<&Path>,
+    carve: bool,
 ) -> Result<EvidenceWorkspace, Box<dyn std::error::Error>> {
     let mut directories = Vec::new();
     let mut files = Vec::new();
     let mut hostnames: HashMap<String, String> = HashMap::new();
     let mut origins: HashMap<String, Provenance> = HashMap::new();
+    let mut events: Vec<crate::parsers::evtx::Event> = Vec::new();
     let mut archives_to_extract = Vec::new();
     let mut images_to_extract = Vec::new();
+    let mut blobs_to_carve: Vec<PathBuf> = Vec::new();
 
     // 1. Inspect direct files
     if let Some(file_list) = raw_files {
@@ -93,6 +98,9 @@ pub fn prepare_evidence(
                     images_to_extract.push(path.to_path_buf());
                 } else if is_supported_archive(path) {
                     archives_to_extract.push(path.to_path_buf());
+                } else if carve && !is_known_artifact(path) {
+                    // pagefile, memory dump, unallocated dump: nothing to parse, carve it
+                    blobs_to_carve.push(path.to_path_buf());
                 } else {
                     files.push(f.clone());
                 }
@@ -128,7 +136,7 @@ pub fn prepare_evidence(
     // 3. Staging directory setup if archives or images need extraction
     let mut temp_staging_dir: Option<PathBuf> = None;
 
-    if !archives_to_extract.is_empty() || !images_to_extract.is_empty() {
+    if !archives_to_extract.is_empty() || !images_to_extract.is_empty() || !blobs_to_carve.is_empty() {
         let staging = match stage_dir {
             Some(dir) => {
                 fs::create_dir_all(dir)?;
@@ -152,8 +160,12 @@ pub fn prepare_evidence(
             );
 
             for img in images_to_extract {
+                let mut extracted_root: Option<PathBuf> = None;
+                let mut computer = "Unknown".to_string();
                 match unpack_disk_image(&img, &staging, silent) {
                     Ok(extraction) => {
+                        extracted_root = extraction.live_dir.parent().map(|p| p.to_path_buf());
+                        computer = crate::parsers::windows::detect_hostname(&extraction.live_dir, None);
                         directories.push(extraction.live_dir.to_string_lossy().to_string());
                         for (dir, tag) in extraction.shadow_dirs {
                             let d = dir.to_string_lossy().to_string();
@@ -168,6 +180,44 @@ pub fn prepare_evidence(
                         );
                     }
                 }
+                if carve {
+                    let out_dir = extracted_root
+                        .clone()
+                        .unwrap_or_else(|| staging.join(img.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "image".to_string())))
+                        .join("carved");
+                    log_message(silent, &format!("🔪 Carving raw bytes of {}", img.display()));
+                    match crate::carve::carve_image(&img, &out_dir, extracted_root.as_deref(), &computer, silent) {
+                        Ok(out) => {
+                            log_message(silent, &format!("  └─ {}", out.summary()));
+                            for (dir, prov) in out.dirs {
+                                let d = dir.to_string_lossy().to_string();
+                                origins.insert(d.clone(), prov);
+                                directories.push(d);
+                            }
+                            events.extend(out.events);
+                        }
+                        Err(e) => log_message(silent, &format!("  ⚠️ Carving failed: {}", e)),
+                    }
+                }
+            }
+        }
+
+        // Plain files carved as blobs (pagefile, memory dump, unallocated dump)
+        for blob in &blobs_to_carve {
+            let name = blob.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "blob".to_string());
+            let out_dir = staging.join(format!("blob_{}", name.replace(['.', ' '], "_"))).join("carved");
+            log_message(silent, &format!("🔪 Carving {} as a raw blob", blob.display()));
+            match crate::carve::carve_blob(blob, &out_dir, "Unknown", silent) {
+                Ok(out) => {
+                    log_message(silent, &format!("  └─ {}", out.summary()));
+                    for (dir, prov) in out.dirs {
+                        let d = dir.to_string_lossy().to_string();
+                        origins.insert(d.clone(), prov);
+                        directories.push(d);
+                    }
+                    events.extend(out.events);
+                }
+                Err(e) => log_message(silent, &format!("  ⚠️ Carving failed: {}", e)),
             }
         }
 
@@ -250,6 +300,21 @@ pub fn prepare_evidence(
         files,
         hostnames,
         origins,
+        events,
         temp_dir: temp_staging_dir,
     })
+}
+
+/// Is a `-f` file something a parser understands (by name or by header)? Anything else is a
+/// blob when `--carve` is on.
+fn is_known_artifact(path: &Path) -> bool {
+    use std::io::Read;
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if archive::is_relevant_artifact(&name) || crate::parsers::ntfs::is_mft_name(&name) || crate::parsers::ntfs::is_usn_name(&name) {
+        return true;
+    }
+    let mut head = [0u8; 8];
+    let n = fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
+    let head = &head[..n];
+    head.starts_with(b"regf") || head.starts_with(b"ElfFile") || crate::parsers::windows::prefetch::is_prefetch(head)
 }

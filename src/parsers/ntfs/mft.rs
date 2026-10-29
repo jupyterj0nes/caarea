@@ -305,6 +305,60 @@ fn is_interesting(path_lower: &str, name_lower: &str) -> bool {
     EXEC_EXTENSIONS.contains(&ext.as_str()) && !is_system_path(path_lower) && !super::is_package_noise(path_lower)
 }
 
+/// Rows for one `FILE` record on its own (carved from raw bytes): no parent resolution, so
+/// the folder is unknown and only names that are strong on their own are reported.
+pub fn standalone_record_events(raw: &[u8], computer: &str, source: &str) -> Vec<Event> {
+    let Ok(entry) = MftEntry::from_buffer(raw.to_vec(), 0) else { return Vec::new() };
+    if entry.header.base_reference.entry != 0 || entry.is_dir() {
+        return Vec::new();
+    }
+    let mut acc = RecordAttrs::default();
+    scan_record(&entry, true, &mut acc);
+    let Some(best) = best_name(&acc.fn_attrs) else { return Vec::new() };
+    if !crate::carve::ntfs::interesting_name(&best.name) {
+        return Vec::new();
+    }
+    let Some(si) = acc.std_info.as_ref() else { return Vec::new() };
+    let record = u32::from_le_bytes(raw[44..48].try_into().unwrap_or([0; 4]));
+    let allocated = entry.is_allocated();
+    let size = acc.data_size.unwrap_or(best.logical_size);
+    let full = format!("[CARVED]\\{}", best.name);
+    let mut notes = vec![format!("size {}", size), format!("MFT #{} seq {}{}", record, entry.header.sequence, if allocated { "" } else { " (record freed)" })];
+    if let Some(bytes) = acc.resident.as_ref() {
+        if SCRIPT_EXTENSIONS.contains(&extension(&best.name.to_ascii_lowercase()).as_str()) {
+            let q = quote_content(bytes);
+            if !q.is_empty() {
+                notes.push(format!("content: {}", q));
+            }
+        }
+    }
+    let mut events = Vec::new();
+    let mut push = |ts: Option<String>, kind: &str| {
+        if let Some(ts) = ts {
+            events.push(Event {
+                timestamp: ts,
+                computer: computer.to_string(),
+                artifact: format!("ntfs:mft:{}", kind),
+                event_id: 0,
+                pid: 0,
+                subject_username: String::new(),
+                target_username: String::new(),
+                processname: full.clone(),
+                commandline: Some(format!("File {} (record carved): {}", kind, notes.join("; "))),
+                parentprocessname: source.to_string(),
+            });
+        }
+    };
+    let created = iso(si.created.as_second(), si.created.subsec_nanosecond());
+    let modified = iso(si.modified.as_second(), si.modified.subsec_nanosecond());
+    let distinct = (si.modified.as_second() - si.created.as_second()).abs() > 2;
+    push(created, "created");
+    if distinct {
+        push(modified, "modified");
+    }
+    events
+}
+
 /// Parses an `$MFT` copy and returns the execution rows plus the directory map.
 pub fn parse_mft_file(path: &Path, computer: &str) -> Result<MftResult, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;

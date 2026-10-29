@@ -20,6 +20,7 @@ Written in Rust. One static binary for Windows, Linux and macOS. No mounting, no
 - **Reads the sources others skip.** Volume Shadow Copies inside E01/raw images, dirty registry hives (their transaction logs are replayed in memory), Prefetch (including the compressed Windows 10/11 format), PowerShell console history, scheduled task XML, Windows Error Reporting, Defender support logs, kernel process accounting (`pacct`), `auditd` execve records, PowerShell ScriptBlock and module logging, Sysmon, AppLocker, WMI consumers.
 - **Gets the time right.** Every timestamp is converted to UTC. Linux logs that only carry wall-clock time (classic syslog, `dpkg.log`, `ps`) are corrected with the host's own time zone, found in the evidence (`/etc/timezone`, `/etc/localtime`, `timedatectl`).
 - **Tells you where a row came from.** Events that only exist in a shadow copy are tagged with the snapshot time; a live event and its snapshot twin are not shown twice. The same vocabulary will mark rows recovered from freed structures and from carving.
+- **Recovers what was deleted.** Freed registry cells and unused `$MFT` records are read by default; `--carve` scans the raw bytes of images, live volumes and pagefiles for hives, event log chunks, MFT and journal records and Prefetch files that no file system points to any more.
 - **Treats evidence as hostile.** Archives are unpacked into an isolated, per-run temporary folder; entries cannot escape it, symlinks are never followed, and packages with the same file name from different hosts never overwrite each other. The evidence itself is only ever read.
 
 ---
@@ -125,6 +126,24 @@ E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or 
 
 ---
 
+## Carving, when you ask for it
+
+`--carve` is off by default and changes nothing about the normal run. With it, every disk image or live volume is read a second time from the first byte to the last, and so are the `pagefile.sys`, `swapfile.sys` and `hiberfil.sys` of each NTFS partition (in place, through their data runs). A plain `-f` file that no parser recognises (a pagefile copied out, a memory dump, a dump of unallocated clusters) is scanned the same way. One pass looks for every structure at once:
+
+| Structure | How it proves itself | What you get |
+| :--- | :--- | :--- |
+| Registry hives (`regf`) | primary hive, sane sizes, hive-bin chain followed offset by offset, root key verified; copies identical to a hive already extracted are skipped | a hive file in the staging folder, parsed by the normal registry pipeline, freed cells included |
+| EVTX chunks (`ElfChnk`) | each 64 KB chunk is parsed under a 3-second budget; the provider of its records names it | one synthetic EVTX per provider, parsed by the normal EVTX pipeline |
+| Orphan event records (`**\0\0`) | size and trailing size agree, BinXML preamble, time between 2000 and 2040 | the record's time and id, as a trace of a cleared log |
+| `$MFT` records (`FILE`) | header geometry and update-sequence fixups | created and modified rows for binaries, scripts and forensic files |
+| `$I30` index blocks (`INDX`) | fixups, then the entries left in the slack after a deletion | the deleted child's name and times |
+| USN journal records | coherent length, version 2 or 3, plausible time, printable name | the same rows as the live journal: Prefetch runs, drops, renames, deletions, log truncation |
+| Prefetch (`MAM`, `SCCA`) | the file decompresses and parses | one row per run |
+
+Rows from carving carry the `carved` origin with the byte offset, and the container when it is not the disk itself: `evtx:4688:carved [@0x1c3f80000]`, `prefetch:carved [pagefile @0x4f000]`. A carved row identical to a live one is dropped by the usual deduplication. Carving only recovers structures that carry their own time; it never guesses a timestamp.
+
+---
+
 ## Time zones, honestly
 
 Most sources carry their own zone (EVTX, registry FILETIMEs, audit, pacct, RFC 3339 syslog, web logs with offset) and are simply converted to UTC.
@@ -156,6 +175,8 @@ caarea [OPTIONS] --output <PATH>
       --start-time <TS>       Keep events from this time on
       --end-time <TS>         Keep events up to this time (a bare date includes the whole day)
       --tz <ZONE>             Time zone of the Linux hosts for zone-less logs (default: detected)
+      --carve                 Also scan raw bytes (images, live volumes, pagefiles, blobs) for structures
+                              no file system points to; off by default, reads the whole image
       --stage-dir <PATH>      Keep the artifacts extracted from images, live volumes and archives here
       --overwrite             Replace the output file if it exists
   -s, --silent                Print nothing but errors
