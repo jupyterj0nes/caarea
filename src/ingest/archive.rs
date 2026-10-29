@@ -78,6 +78,14 @@ pub fn is_relevant_artifact(entry_name: &str) -> bool {
         || file_name == "report.wer"
         || ((file_name.starts_with("mplog-") || file_name.starts_with("mpdetection-")) && file_name.ends_with(".log"))
         || file_name == "pcaapplaunchdic.txt"
+        || file_name == "srudb.dat"
+        || file_name.ends_with(".lnk")
+        || file_name.ends_with(".automaticdestinations-ms")
+        || file_name.ends_with(".customdestinations-ms")
+        || file_name == "activitiescache.db"
+        || file_name == "activitiescache.db-wal"
+        || file_name == "recentfilecache.bcf"
+        || file_name == "objects.data"
         || (file_name.starts_with("pcageneraldb") && file_name.ends_with(".txt"))
         || (lower.contains("/tasks/") && !file_name.contains('.'))
     {
@@ -85,7 +93,7 @@ pub fn is_relevant_artifact(entry_name: &str) -> bool {
     }
 
     // Windows Registry hives and their transaction logs (.LOG, .LOG1, .LOG2)
-    let standard_hives = ["system", "software", "sam", "security", "default", "ntuser.dat", "usrclass.dat", "amcache.hve"];
+    let standard_hives = ["system", "software", "sam", "security", "default", "ntuser.dat", "usrclass.dat", "amcache.hve", "syscache.hve"];
     let hive_stem = file_name
         .trim_end_matches(".log1")
         .trim_end_matches(".log2")

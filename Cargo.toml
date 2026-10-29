@@ -26,9 +26,12 @@ lvm2 = "0.0.3"
 systemd-journal-reader = "0.1.1"
 lzma-rs = "0.3"
 memchr = "2"
+sootmark-ese = "0.1"
+lnk-core = "0.4"
 mbrman = "0.6"
 vshadow = "0.2"
 regex = "1.10"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [profile.release]
 opt-level = 3

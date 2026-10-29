@@ -18,7 +18,29 @@ Phase 8 (Linux carving) implemented on the same pass: journal files by header, p
 utmp records by strict structure, audit lines and `#epoch` history blocks by text search
 (memchr); validated on an ext4 test image with the artifacts deleted (journal, audit lines,
 history, wtmp all came back). Journal entries carried on the audit transport (no auditd)
-are assembled into execve rows. Phases 9 and 10 not started.
+are assembled into execve rows. Commits: 1d25ee3 (phase 6), e791642 (phase 7), 6a5f069
+(phase 8). EVTX chunks are never parsed in the main process (CRC32 acceptance, child-process
+validation with bisection); live carve of DEV-SRV01 (50 GB, 4 GB RAM): 15 min, 69795 rows, of
+which 37223 only exist carved (older cleared Security log, index slack, journal records).
+Phase 9 (heavy formats) implemented: SRUM through the pure-Rust `sootmark-ese` reader
+(app resource, network usage, app timeline tables), Jump Lists and shortcuts through
+`lnk-core` (DestList times and access counts, well-known AppIDs named), Windows Timeline
+through bundled SQLite (`Activity` plus `ActivityOperation`, database copied with its WAL
+to scratch before opening), WMI `OBJECTS.DATA` subscriptions by class-name scan with the
+instance record's FILETIME, `RecentFileCache.bcf`, `Syscache.hve`, and the second-line
+registry keys (MUICache, PCA store, RecentApps, FeatureUsage, CapabilityAccessManager).
+Image and live extraction stage `sru`, `wbem\Repository`, `AppCompat\Programs`, `System
+Volume Information\Syscache.hve`, per-profile `Recent` and `ConnectedDevicesPlatform`.
+Validated: SRUM and Jump Lists on DEV-SRV01 live (1411 hourly resource rows, Explorer
+Jump List entries with access counts); WMI on DEV-SRV01 (a real subscription created in
+the lab plus one from an earlier run both recovered, with filter, consumer command line
+and binding; the record stamp was matched to the WMI service start in the System log);
+Jump Lists and shortcuts on a Windows 11 workstation; Timeline on the public dissect test
+database (`datasets/public/timeline`, opened and focus rows), because neither Windows 11
+nor Server 2022 record user activities any more. The lab's Server 2022 SRUM has neither
+the app timeline table nor the network data usage table; the per-interface SDP tables are
+left out on purpose. `RecentFileCache.bcf` and `Syscache.hve` have unit tests only (no
+Windows 7 host in the lab). Phase 10 not started.
 Lab notes: Windows Server does not write Prefetch even with `EnablePrefetcher=3`; the GCE VMDK
 export needs a free instance slot in the region (the kept jumpbox fills the quota of 8).
 

@@ -257,7 +257,10 @@ fn extract_artifacts_from_volume<R: Read + Seek>(volume: &mut R, part_dir: &Path
     //    (ProgramData\Microsoft\Windows\WER\Report{Archive,Queue}\**\Report.wer), Defender
     //    support logs (MPLog-*.log, MPDetection-*.log) and PCA logs (Windows\appcompat\pca)
     type TreeSpec = (&'static [&'static str], &'static str, fn(&str) -> bool);
-    let trees: [TreeSpec; 5] = [
+    let trees: [TreeSpec; 9] = [
+        (&["Windows", "AppCompat", "Programs"], "AppCompat/Programs", |n| n.eq_ignore_ascii_case("RecentFileCache.bcf")),
+        (&["Windows", "System32", "wbem", "Repository"], "wbem/Repository", |n| n.eq_ignore_ascii_case("OBJECTS.DATA")),
+        (&["System Volume Information"], "System Volume Information", |n| n.eq_ignore_ascii_case("Syscache.hve")),
         (&["Windows", "System32", "Tasks"], "Tasks", |_n| true),
         (&["ProgramData", "Microsoft", "Windows", "WER", "ReportArchive"], "WER/ReportArchive", |n| n.eq_ignore_ascii_case("report.wer")),
         (&["ProgramData", "Microsoft", "Windows", "WER", "ReportQueue"], "WER/ReportQueue", |n| n.eq_ignore_ascii_case("report.wer")),
@@ -266,6 +269,7 @@ fn extract_artifacts_from_volume<R: Read + Seek>(volume: &mut R, part_dir: &Path
             (l.starts_with("mplog-") || l.starts_with("mpdetection-")) && l.ends_with(".log")
         }),
         (&["Windows", "appcompat", "pca"], "appcompat/pca", |n| n.to_ascii_lowercase().ends_with(".txt")),
+        (&["Windows", "System32", "sru"], "sru", |n| n.eq_ignore_ascii_case("SRUDB.dat")),
     ];
     for (path, dest, pred) in trees {
         if let Ok(dir) = navigate_to_path(&ntfs, &root_dir, volume, path) {
@@ -284,6 +288,32 @@ fn extract_artifacts_from_volume<R: Read + Seek>(volume: &mut R, part_dir: &Path
             &["AppData", "Roaming", "Microsoft", "Windows", "PowerShell", "PSReadLine"],
             "PSReadLine",
             |n| n.to_ascii_lowercase().ends_with("_history.txt"),
+        );
+        // Recent items: shortcuts and Jump Lists of every profile
+        total_extracted += dump_user_files(
+            &ntfs,
+            &users_dir,
+            volume,
+            &part_dir.join("Users"),
+            &["AppData", "Roaming", "Microsoft", "Windows", "Recent"],
+            "Recent",
+            |n| {
+                let l = n.to_ascii_lowercase();
+                l.ends_with(".lnk") || l.ends_with(".automaticdestinations-ms") || l.ends_with(".customdestinations-ms")
+            },
+        );
+        // Windows Timeline of every profile and account (database plus its write-ahead log)
+        total_extracted += dump_user_files(
+            &ntfs,
+            &users_dir,
+            volume,
+            &part_dir.join("Users"),
+            &["AppData", "Local", "ConnectedDevicesPlatform"],
+            "ConnectedDevicesPlatform",
+            |n| {
+                let l = n.to_ascii_lowercase();
+                l == "activitiescache.db" || l == "activitiescache.db-wal"
+            },
         );
     }
 
@@ -429,7 +459,7 @@ fn dump_user_files<R: Read + Seek>(
     for (username, u_ref) in user_dirs {
         if let Ok(user_dir) = u_ref.to_file(ntfs, reader) {
             if let Ok(target) = navigate_to_path(ntfs, &user_dir, reader, sub_path) {
-                count += dump_tree_matching(ntfs, &target, reader, &dest.join(&username).join(label), pred, 0);
+                count += dump_tree_matching(ntfs, &target, reader, &dest.join(&username).join(label), pred, 2);
             }
         }
     }

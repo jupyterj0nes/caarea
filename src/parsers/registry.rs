@@ -478,6 +478,119 @@ pub fn parse_registry_file_with_defaults(
     }
 
     // ==========================================
+    // 6c. RecentApps (Windows 10 1607-1709), FeatureUsage (1903+) and the
+    //     CapabilityAccessManager consent store (camera, microphone, location use per app)
+    // ==========================================
+    if let Ok(Some(ra)) = hive.open(r"Software\Microsoft\Windows\CurrentVersion\Search\RecentApps") {
+        if let Ok(apps) = ra.subkeys() {
+            for app in apps {
+                let mut app_id = String::new();
+                let mut last: Option<u64> = None;
+                let mut count: u32 = 0;
+                if let Ok(values) = app.values() {
+                    for v in values.into_iter().flatten() {
+                        match (v.name.as_str(), v.data()) {
+                            ("AppId", Data::String(s)) => app_id = s,
+                            ("LastAccessedTime", Data::Qword(q)) => last = Some(q),
+                            ("LastAccessedTime", Data::Bytes(b)) if b.len() >= 8 => last = Some(u64::from_le_bytes(b[..8].try_into().unwrap())),
+                            ("LaunchCount", Data::Dword(d)) => count = d,
+                            _ => {}
+                        }
+                    }
+                }
+                if let Some(ts) = last.and_then(filetime_to_iso) {
+                    if !app_id.is_empty() {
+                        events.push(Event {
+                            timestamp: ts,
+                            computer: computer_name.clone(),
+                            artifact: "registry:recentapps".to_string(),
+                            event_id: 0,
+                            pid: 0,
+                            subject_username: user_name.clone(),
+                            target_username: user_name.clone(),
+                            processname: app_id.clone(),
+                            commandline: Some(format!("RecentApps last access (launch count {})", count)),
+                            parentprocessname: "explorer.exe".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    for (sub, what) in [("AppSwitched", "app switched to"), ("AppLaunch", "app launched"), ("ShowJumpView", "jump list opened"), ("AppBadgeUpdated", "badge updated")] {
+        let path = format!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage\{}", sub);
+        if let Ok(Some(key)) = hive.open(&path) {
+            if let (Some(ts), Ok(values)) = (filetime_to_iso(key.last_written), key.values()) {
+                for v in values.into_iter().flatten() {
+                    let n = if let Data::Dword(d) = v.data() { d } else { 0 };
+                    if v.name.is_empty() {
+                        continue;
+                    }
+                    events.push(Event {
+                        timestamp: ts.clone(),
+                        computer: computer_name.clone(),
+                        artifact: "registry:featureusage".to_string(),
+                        event_id: 0,
+                        pid: 0,
+                        subject_username: user_name.clone(),
+                        target_username: user_name.clone(),
+                        processname: v.name.clone(),
+                        commandline: Some(format!("FeatureUsage {}: {} time(s) (key time)", what, n)),
+                        parentprocessname: "explorer.exe".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    for root in [
+        r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore",
+        r"Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore",
+    ] {
+        if let Ok(Some(store)) = hive.open(root) {
+            if let Ok(caps) = store.subkeys() {
+                for cap in caps {
+                    let Ok(Some(nonpackaged)) = hive.open(&format!("{}\\{}\\NonPackaged", root, cap.name)) else { continue };
+                    let Ok(apps) = nonpackaged.subkeys() else { continue };
+                    for app in apps {
+                        let exe = app.name.replace('#', "\\");
+                        let mut start: Option<u64> = None;
+                        let mut stop: Option<u64> = None;
+                        if let Ok(values) = app.values() {
+                            for v in values.into_iter().flatten() {
+                                let q = match v.data() {
+                                    Data::Qword(q) => q,
+                                    Data::Bytes(b) if b.len() >= 8 => u64::from_le_bytes(b[..8].try_into().unwrap()),
+                                    _ => continue,
+                                };
+                                match v.name.as_str() {
+                                    "LastUsedTimeStart" => start = Some(q),
+                                    "LastUsedTimeStop" => stop = Some(q),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        if let Some(ts) = start.and_then(filetime_to_iso) {
+                            let until = stop.and_then(filetime_to_iso).unwrap_or_else(|| "still in use".to_string());
+                            events.push(Event {
+                                timestamp: ts,
+                                computer: computer_name.clone(),
+                                artifact: "registry:capability_access".to_string(),
+                                event_id: 0,
+                                pid: 0,
+                                subject_username: user_name.clone(),
+                                target_username: user_name.clone(),
+                                processname: exe.clone(),
+                                commandline: Some(format!("Used {} (until {})", cap.name, until)),
+                                parentprocessname: "CapabilityAccessManager".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ==========================================
     // 7. Scheduled Tasks (TaskCache in SOFTWARE)
     // ==========================================
     let tasks_found = tasks::tasks(&hive);
@@ -668,6 +781,9 @@ pub fn parse_registry_file_with_defaults(
 
     // Freed cells: keys and values deleted from the hive but not yet overwritten
     let source = file_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if crate::parsers::syscache::is_syscache_name(&source) {
+        events.extend(crate::parsers::syscache::events(&hive, &computer_name, &source));
+    }
     let (recovered, deleted_keys, orphan_values) =
         crate::parsers::registry_deleted::events_for_hive(&data[..], &computer_name, &user_name, &source);
     if deleted_keys > 0 || orphan_values > 0 {

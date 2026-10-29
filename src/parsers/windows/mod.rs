@@ -2,13 +2,18 @@
 //! Prefetch, PowerShell console history, scheduled task XML, Windows Error Reporting,
 //! Defender support logs, Program Compatibility Assistant logs.
 
+pub mod jumplists;
 pub mod mplog;
 pub mod pca;
 pub mod prefetch;
 pub mod psreadline;
+pub mod recentfilecache;
+pub mod srum;
 pub mod tasks_xml;
+pub mod timeline;
 pub mod text;
 pub mod wer;
+pub mod wmi;
 pub mod xpress;
 
 use std::collections::BTreeMap;
@@ -65,6 +70,12 @@ enum Kind {
     Wer,
     MpLog,
     Pca,
+    Srum,
+    JumpList,
+    Lnk,
+    Timeline,
+    RecentFileCache,
+    Wmi,
 }
 
 impl Kind {
@@ -76,6 +87,12 @@ impl Kind {
             Kind::Wer => "WER reports",
             Kind::MpLog => "Defender logs",
             Kind::Pca => "PCA logs",
+            Kind::Srum => "SRUM",
+            Kind::JumpList => "Jump Lists",
+            Kind::Lnk => "shortcuts",
+            Kind::Timeline => "Timeline",
+            Kind::RecentFileCache => "RecentFileCache",
+            Kind::Wmi => "WMI repository",
         }
     }
 }
@@ -98,6 +115,24 @@ fn classify(path: &Path) -> Option<Kind> {
     }
     if pca::is_pca_file(&name) {
         return Some(Kind::Pca);
+    }
+    if srum::is_srum(&name) {
+        return Some(Kind::Srum);
+    }
+    if jumplists::is_jumplist(&name) {
+        return Some(Kind::JumpList);
+    }
+    if jumplists::is_lnk(&name) {
+        return Some(Kind::Lnk);
+    }
+    if timeline::is_timeline(&name) {
+        return Some(Kind::Timeline);
+    }
+    if recentfilecache::is_recentfilecache(&name) {
+        return Some(Kind::RecentFileCache);
+    }
+    if wmi::is_objects_data(&name) {
+        return Some(Kind::Wmi);
     }
     // Task definitions have no extension; only look at files under a "Tasks" folder (or
     // any file called *.xml) to keep the content sniff cheap.
@@ -127,6 +162,29 @@ fn parse_kind(kind: Kind, path: &Path, computer: &str, silent: bool) -> Vec<Even
         Kind::Wer => wer::parse_file(path, computer),
         Kind::MpLog => mplog::parse_file(path, computer),
         Kind::Pca => pca::parse_file(path, computer),
+        Kind::Srum => match srum::parse_file(path, computer) {
+            Ok(res) => {
+                if res.problems > 0 {
+                    log_message(silent, &format!("  ⚠️ SRUM {}: {} damaged page(s) or value(s) skipped", path.display(), res.problems));
+                }
+                res.events
+            }
+            Err(e) => {
+                log_message(silent, &format!("  ⚠️ SRUM {}: {}", path.display(), e));
+                Vec::new()
+            }
+        },
+        Kind::JumpList => jumplists::parse_jumplist(path, computer),
+        Kind::Lnk => jumplists::parse_lnk(path, computer),
+        Kind::Timeline => match timeline::parse_file(path, computer) {
+            Ok(rows) => rows,
+            Err(e) => {
+                log_message(silent, &format!("  ⚠️ Timeline {}: {}", path.display(), e));
+                Vec::new()
+            }
+        },
+        Kind::RecentFileCache => recentfilecache::parse_file(path, computer),
+        Kind::Wmi => wmi::parse_file(path, computer),
     }
 }
 
