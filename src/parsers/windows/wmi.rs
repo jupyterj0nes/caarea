@@ -250,6 +250,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
             processname: subject(&hit),
             commandline: Some(format!("{} ({}): {}", what, when, hit.strings.join(" | "))),
             parentprocessname: source.clone(),
+            meta: None,
         });
     }
     events

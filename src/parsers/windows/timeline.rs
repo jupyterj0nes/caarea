@@ -177,6 +177,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Result<Vec<Event>, String> {
             processname: row.app,
             commandline: Some(details),
             parentprocessname: "ActivitiesCache.db".to_string(),
+            meta: None,
         });
     }
     Ok(events)

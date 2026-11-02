@@ -146,6 +146,7 @@ pub fn parse_web_access_log(file_path: &Path, computer_name: &str, tz: &HostTime
             processname: script_name,
             commandline: Some(format!("{} {} (Status: {}, Client: {})", method, uri, status_code, client_ip)),
             parentprocessname: "httpd/nginx".to_string(),
+            meta: None,
         });
     }
 

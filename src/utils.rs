@@ -178,6 +178,7 @@ mod tests {
             processname: proc_name.to_string(),
             commandline: None,
             parentprocessname: "p.exe".to_string(),
+            meta: None,
         }
     }
 

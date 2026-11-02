@@ -139,6 +139,7 @@ pub fn parse_registry_file_with_defaults(
                         processname: "UserLogon".to_string(),
                         commandline: Some(format!("Profile SID: {}, Path: {:?}", profile.sid, profile.image_path)),
                         parentprocessname: "winlogon.exe".to_string(),
+                        meta: None,
                     });
                 }
             }
@@ -157,6 +158,7 @@ pub fn parse_registry_file_with_defaults(
                         processname: "UserLogoff".to_string(),
                         commandline: Some(format!("Profile SID: {}, Path: {:?}", profile.sid, profile.image_path)),
                         parentprocessname: "winlogon.exe".to_string(),
+                        meta: None,
                     });
                 }
             }
@@ -188,6 +190,7 @@ pub fn parse_registry_file_with_defaults(
                         processname: entry.program.clone(),
                         commandline: Some(format!("Key: {}", entry.key)),
                         parentprocessname: "N/A".to_string(),
+                        meta: None,
                     });
                 }
             }
@@ -219,6 +222,7 @@ pub fn parse_registry_file_with_defaults(
                                     processname: entry.path.clone(),
                                     commandline: Some(format!("Position: {}, {}", entry.position, exec_str)),
                                     parentprocessname: "N/A".to_string(),
+                                    meta: None,
                                 });
                             }
                         }
@@ -277,6 +281,7 @@ pub fn parse_registry_file_with_defaults(
                                 processname: proc_name,
                                 commandline: Some(details),
                                 parentprocessname: "services.exe".to_string(),
+                                meta: None,
                             });
                         }
                     }
@@ -326,6 +331,7 @@ pub fn parse_registry_file_with_defaults(
                                                 processname: resolved_path,
                                                 commandline: Some(details),
                                                 parentprocessname: "explorer.exe".to_string(),
+                                                meta: None,
                                             });
                                         }
                                     }
@@ -361,6 +367,7 @@ pub fn parse_registry_file_with_defaults(
                 processname: entry.text.clone(),
                 commandline: Some(format!("List: {:?}, Position: {:?}, Key: {}", entry.list, entry.position, entry.key)),
                 parentprocessname: "explorer.exe".to_string(),
+                meta: None,
             });
         }
     }
@@ -400,6 +407,7 @@ pub fn parse_registry_file_with_defaults(
                                 processname: val.name.clone(),
                                 commandline: Some(format!("Key: {}\\{}, Cmd: {}", path, val.name, cmd_str)),
                                 parentprocessname: "explorer.exe".to_string(),
+                                meta: None,
                             });
                         }
                     }
@@ -448,6 +456,7 @@ pub fn parse_registry_file_with_defaults(
                         processname: exe,
                         commandline: Some(format!("MUICache {}: {} (key time)", what, label)),
                         parentprocessname: "explorer.exe".to_string(),
+                        meta: None,
                     });
                 }
             }
@@ -472,6 +481,7 @@ pub fn parse_registry_file_with_defaults(
                     processname: name,
                     commandline: Some("Program Compatibility Assistant store entry (key time)".to_string()),
                     parentprocessname: "PcaSvc".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -511,6 +521,7 @@ pub fn parse_registry_file_with_defaults(
                             processname: app_id.clone(),
                             commandline: Some(format!("RecentApps last access (launch count {})", count)),
                             parentprocessname: "explorer.exe".to_string(),
+                            meta: None,
                         });
                     }
                 }
@@ -537,6 +548,7 @@ pub fn parse_registry_file_with_defaults(
                         processname: v.name.clone(),
                         commandline: Some(format!("FeatureUsage {}: {} time(s) (key time)", what, n)),
                         parentprocessname: "explorer.exe".to_string(),
+                        meta: None,
                     });
                 }
             }
@@ -582,6 +594,7 @@ pub fn parse_registry_file_with_defaults(
                                 processname: exe.clone(),
                                 commandline: Some(format!("Used {} (until {})", cap.name, until)),
                                 parentprocessname: "CapabilityAccessManager".to_string(),
+                                meta: None,
                             });
                         }
                     }
@@ -621,6 +634,7 @@ pub fn parse_registry_file_with_defaults(
                     processname: proc,
                     commandline: Some(format!("Task: {}, Actions: {}", task.path, action_cmd)),
                     parentprocessname: "taskeng.exe".to_string(),
+                    meta: None,
                 });
             }
 
@@ -637,6 +651,7 @@ pub fn parse_registry_file_with_defaults(
                     processname: proc,
                     commandline: Some(format!("Task: {}, Actions: {}", task.path, action_cmd)),
                     parentprocessname: "schtasks.exe".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -660,6 +675,7 @@ pub fn parse_registry_file_with_defaults(
                     processname: entry.value.clone(),
                     commandline: Some(format!("Key: {}, Data: {}", entry.key, entry.data)),
                     parentprocessname: "N/A".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -698,6 +714,7 @@ pub fn parse_registry_file_with_defaults(
                 processname: proc_name,
                 commandline: Some(details),
                 parentprocessname: "installer".to_string(),
+                meta: None,
             });
         }
     }
@@ -733,6 +750,7 @@ pub fn parse_registry_file_with_defaults(
                     processname: path_str.to_string(),
                     commandline: Some(format!("SHA1: {}, Class: {}", sha1_str, entry.class.name())),
                     parentprocessname: "Amcache.hve".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -768,6 +786,7 @@ pub fn parse_registry_file_with_defaults(
                                                 ver_key.name, app_key.name
                                             )),
                                             parentprocessname: format!("{}.exe", app_key.name),
+                                            meta: None,
                                         });
                                     }
                                 }

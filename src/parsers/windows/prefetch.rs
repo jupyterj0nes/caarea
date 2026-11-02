@@ -176,6 +176,7 @@ pub fn events_for(pf: &Prefetch, source_name: &str, computer: &str) -> Vec<Event
                 volume
             )),
             parentprocessname: source_name.to_string(),
+            meta: None,
         })
         .collect()
 }

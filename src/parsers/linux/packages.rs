@@ -46,6 +46,7 @@ pub fn parse_rpm_query_file(file_path: &Path, computer_name: &str) -> Vec<Event>
                     processname: name.to_string(),
                     commandline: Some(format!("RPM Package Installed: {} ({})", name, version)),
                     parentprocessname: "rpm/yum".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -96,6 +97,7 @@ pub fn parse_dpkg_log(file_path: &Path, computer_name: &str, tz: &HostTimezone) 
                     processname: pkg_name.to_string(),
                     commandline: Some(format!("Debian Package Installed: {} ({})", pkg_name, pkg_version)),
                     parentprocessname: "dpkg/apt".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -144,6 +146,7 @@ pub fn parse_apt_history(file_path: &Path, computer_name: &str, tz: &HostTimezon
             processname: cmd.split_whitespace().next().unwrap_or("apt").to_string(),
             commandline: Some(if summary.is_empty() { cmd.clone() } else { format!("{} | {}", cmd, summary.join(" | ")) }),
             parentprocessname: "apt".to_string(),
+            meta: None,
         });
     }
     events
@@ -178,6 +181,7 @@ pub fn parse_pacman_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
             processname: cmd.split_whitespace().next().unwrap_or("pacman").to_string(),
             commandline: Some(cmd),
             parentprocessname: "pacman".to_string(),
+            meta: None,
         });
     }
     events
@@ -225,6 +229,7 @@ pub fn parse_rpm_log(file_path: &Path, computer_name: &str, tz: &HostTimezone) -
             processname: pkg.to_string(),
             commandline: Some(format!("{}: {}", verb, pkg)),
             parentprocessname: "dnf/yum".to_string(),
+            meta: None,
         });
     }
     events
@@ -252,6 +257,7 @@ pub fn parse_zypp_history(file_path: &Path, computer_name: &str, tz: &HostTimezo
             processname: cmd.split_whitespace().next().unwrap_or("zypper").to_string(),
             commandline: Some(cmd),
             parentprocessname: "zypper".to_string(),
+            meta: None,
         });
     }
     events

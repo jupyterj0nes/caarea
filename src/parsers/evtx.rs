@@ -35,6 +35,33 @@ pub struct Event {
     pub processname: String,
     pub commandline: Option<String>,
     pub parentprocessname: String,
+    /// Process metadata that the ten CSV columns do not carry (parent PID, GUIDs,
+    /// integrity, hashes). Filled by the process-creation parsers, read by the hunt.
+    pub meta: Option<Box<ProcMeta>>,
+}
+
+/// Extra fields of a process creation or exit record, kept in memory for the process tree
+/// and the hunt rules. Never exported to the timeline CSV.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ProcMeta {
+    /// PID of the creator (4688 `ProcessId`, Sysmon `ParentProcessId`, audit/pacct `ppid`).
+    pub ppid: u32,
+    /// Sysmon `ProcessGuid`, stable across PID reuse.
+    pub guid: String,
+    /// Sysmon `ParentProcessGuid`.
+    pub parent_guid: String,
+    /// Sysmon `ParentCommandLine`.
+    pub parent_cmdline: String,
+    /// Sysmon `IntegrityLevel` or the 4688 `MandatoryLabel` translated (Low, Medium, High, System).
+    pub integrity: String,
+    /// 4688 `TokenElevationType`: Default, Full or Limited.
+    pub token_elevation: String,
+    /// Logon session (4688 `SubjectLogonId`, Sysmon `LogonId`).
+    pub logon_id: String,
+    /// Sysmon `Hashes` as logged (`SHA256=...,MD5=...`).
+    pub hashes: String,
+    /// Sysmon `OriginalFileName` from the version resource.
+    pub original_filename: String,
 }
 
 /// Logs a message with a human-readable timestamp and CAAREA branding
@@ -428,6 +455,7 @@ pub fn extract_event(json_str: &str) -> Option<Event> {
     let mut commandline: Option<String> = None;
     let mut parentprocessname = String::new();
     let mut pid: u32 = 0;
+    let mut meta: Option<Box<ProcMeta>> = None;
 
     match artifact.as_str() {
         "evtx:4688" => {
@@ -441,6 +469,13 @@ pub fn extract_event(json_str: &str) -> Option<Event> {
             if pid == 0 {
                 pid = f.get("ProcessId").map(|s| parse_pid(s)).unwrap_or(0);
             }
+            meta = Some(Box::new(ProcMeta {
+                ppid: f.get("ProcessId").map(|s| parse_pid(s)).unwrap_or(0),
+                integrity: f.get("MandatoryLabel").map(|s| mandatory_label(s)).unwrap_or_default(),
+                token_elevation: f.get("TokenElevationType").map(|s| token_elevation(s)).unwrap_or_default(),
+                logon_id: f.get("SubjectLogonId").cloned().unwrap_or_default(),
+                ..Default::default()
+            }));
         }
         "evtx:4697" => {
             subject_username = domain_user(f.get("SubjectDomainName"), f.get("SubjectUserName"));
@@ -507,6 +542,17 @@ pub fn extract_event(json_str: &str) -> Option<Event> {
             subject_username = f.get("User").cloned().unwrap_or_default();
             target_username = f.get("IntegrityLevel").cloned().unwrap_or_default();
             pid = f.get("ProcessId").map(|s| parse_pid(s)).unwrap_or(0);
+            meta = Some(Box::new(ProcMeta {
+                ppid: f.get("ParentProcessId").map(|s| parse_pid(s)).unwrap_or(0),
+                guid: f.get("ProcessGuid").cloned().unwrap_or_default(),
+                parent_guid: f.get("ParentProcessGuid").cloned().unwrap_or_default(),
+                parent_cmdline: f.get("ParentCommandLine").cloned().unwrap_or_default(),
+                integrity: f.get("IntegrityLevel").cloned().unwrap_or_default(),
+                logon_id: f.get("LogonId").cloned().unwrap_or_default(),
+                hashes: f.get("Hashes").cloned().unwrap_or_default(),
+                original_filename: f.get("OriginalFileName").cloned().unwrap_or_default(),
+                ..Default::default()
+            }));
         }
         "evtx:taskscheduler:106" => {
             processname = f.get("TaskName").cloned().unwrap_or_default();
@@ -714,6 +760,7 @@ pub fn extract_event(json_str: &str) -> Option<Event> {
         "evtx:sysmon:5" => {
             processname = f.get("Image").cloned().unwrap_or_default();
             pid = f.get("ProcessId").map(|s| parse_pid(s)).unwrap_or(0);
+            meta = Some(Box::new(ProcMeta { guid: f.get("ProcessGuid").cloned().unwrap_or_default(), ..Default::default() }));
             subject_username = f.get("User").cloned().unwrap_or_default();
             commandline = Some("Process terminated".to_string());
         }
@@ -842,7 +889,37 @@ pub fn extract_event(json_str: &str) -> Option<Event> {
         processname,
         commandline,
         parentprocessname,
+        meta,
     })
+}
+
+/// Translates the 4688 `MandatoryLabel` SID into the integrity level name Sysmon uses.
+fn mandatory_label(sid: &str) -> String {
+    match sid.trim() {
+        "S-1-16-0" => "Untrusted",
+        "S-1-16-4096" => "Low",
+        "S-1-16-8192" => "Medium",
+        "S-1-16-8448" => "Medium Plus",
+        "S-1-16-12288" => "High",
+        "S-1-16-16384" => "System",
+        "S-1-16-20480" => "Protected",
+        "" | "-" => "",
+        other => other,
+    }
+    .to_string()
+}
+
+/// Translates the 4688 `TokenElevationType` message ids (%%1936 Default, %%1937 Full,
+/// %%1938 Limited).
+fn token_elevation(code: &str) -> String {
+    match code.trim() {
+        "%%1936" => "Default",
+        "%%1937" => "Full",
+        "%%1938" => "Limited",
+        "" | "-" => "",
+        other => other,
+    }
+    .to_string()
 }
 
 #[cfg(test)]

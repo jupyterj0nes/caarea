@@ -82,6 +82,18 @@ pub fn build_cli() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("hunt")
+                .long("hunt")
+                .help("Run the process hunt over the finished timeline and write the findings next to it (<output>.hunt.csv): core processes with the wrong parent, sensitive parents creating what they never create, Office / web server / database / service shells, dead creators, duplicate lsass. Each finding carries a score, the ATT&CK technique, the process lineage and an explanation")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("hunt_output")
+                .long("hunt-output")
+                .value_name("PATH")
+                .help("Destination CSV for the hunt findings (default: the timeline path with .hunt before the extension)"),
+        )
+        .arg(
             Arg::new("stage_dir")
                 .long("stage-dir")
                 .value_name("PATH")

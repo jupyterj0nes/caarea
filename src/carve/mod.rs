@@ -400,6 +400,7 @@ pub fn carve_source(
                             processname: "orphan EVTX record".to_string(),
                             commandline: Some(format!("Event record {} ({} bytes) outside any chunk: content not renderable, the log it belonged to was cleared or deleted", id, size)),
                             parentprocessname: source_name.clone(),
+                            meta: None,
                         });
                         pos += (size as usize).max(8) & !7;
                         continue;

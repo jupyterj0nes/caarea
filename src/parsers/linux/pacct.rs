@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::parsers::evtx::Event;
+use crate::parsers::evtx::{Event, ProcMeta};
 use crate::utils::epoch_to_iso;
 
 /// Size of every accounting record (`struct acct` and `struct acct_v3` are both 64 bytes).
@@ -141,6 +141,7 @@ pub fn record_event(rec: &AcctRecord, computer_name: &str) -> Option<Event> {
         processname: rec.comm.clone(),
         commandline: Some(details),
         parentprocessname: if rec.ppid > 0 { format!("PID: {}", rec.ppid) } else { "N/A".to_string() },
+        meta: Some(Box::new(ProcMeta { ppid: rec.ppid, ..Default::default() })),
     })
 }
 

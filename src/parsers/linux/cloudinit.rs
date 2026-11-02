@@ -58,6 +58,7 @@ pub fn parse_cloud_init_log(path: &Path, computer: &str, tz: &HostTimezone) -> V
             processname: cmd.split_whitespace().next().unwrap_or("").to_string(),
             commandline: Some(format!("cloud-init ran: {}", cmd)),
             parentprocessname: "cloud-init".to_string(),
+            meta: None,
         });
     }
     events
@@ -98,6 +99,7 @@ pub fn parse_mail_spool(path: &Path, computer: &str) -> Vec<Event> {
             processname: cmd.split_whitespace().next().unwrap_or("").to_string(),
             commandline: Some(format!("cron job output mailed: {}", cmd)),
             parentprocessname: format!("mail spool {}", user),
+            meta: None,
         });
     }
     events

@@ -95,6 +95,7 @@ pub fn record_event(rec: &[u8], big: bool, failed_log: bool, computer: &str, sou
         processname: if line.is_empty() { "login".to_string() } else { line.clone() },
         commandline: Some(details),
         parentprocessname: source.to_string(),
+        meta: None,
     })
 }
 

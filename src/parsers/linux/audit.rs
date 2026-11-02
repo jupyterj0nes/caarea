@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use crate::parsers::evtx::Event;
+use crate::parsers::evtx::{Event, ProcMeta};
 use crate::utils::epoch_to_iso;
 
 /// `auid` value used by the kernel when no login session is attached (`(unsigned)-1`).
@@ -233,6 +233,7 @@ pub fn parse_audit_lines(lines: impl Iterator<Item = String>, computer_name: &st
                     processname: proc_name,
                     commandline: Some(format!("{} (CWD: {})", decoded_cmd, cwd)),
                     parentprocessname: "sudo/pam".to_string(),
+                    meta: None,
                 });
             }
             // Units started or stopped by systemd, user sessions, abnormal ends, denials
@@ -304,6 +305,7 @@ pub fn parse_audit_lines(lines: impl Iterator<Item = String>, computer_name: &st
                     processname: proc_name,
                     commandline: Some(details),
                     parentprocessname: parent,
+                    meta: None,
                 });
             }
             "SYSCALL" => {
@@ -395,6 +397,7 @@ pub fn parse_audit_lines(lines: impl Iterator<Item = String>, computer_name: &st
             processname: proc_name,
             commandline: Some(details),
             parentprocessname: format!("PID: {}", exec.ppid),
+            meta: Some(Box::new(ProcMeta { ppid: exec.ppid, ..Default::default() })),
         });
     }
 

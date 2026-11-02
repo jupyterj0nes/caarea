@@ -1,5 +1,6 @@
 pub mod carve;
 mod cli;
+pub mod hunt;
 pub mod ingest;
 pub mod parsers;
 pub mod provenance;
@@ -156,6 +157,14 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     // Prepare evidence targets (unpacking triage archives, ZIP, TAR.GZ, disk images if present)
     let stage_dir = matches.get_one::<String>("stage_dir").map(std::path::PathBuf::from);
     let carve = matches.get_flag("carve");
+    let hunt = matches.get_flag("hunt");
+    let hunt_output = matches
+        .get_one::<String>("hunt_output")
+        .cloned()
+        .unwrap_or_else(|| hunt::default_findings_path(output));
+    if hunt && Path::new(&hunt_output).exists() && !overwrite {
+        return Err(format!("❌ Error: Hunt output file '{}' already exists. Use '--overwrite' to replace it.", hunt_output).into());
+    }
     let workspace = ingest::prepare_evidence(directories.as_deref(), files.as_deref(), silent, stage_dir.as_deref(), carve)?;
 
     let run_evtx = modules == "evtx" || modules == "all";
@@ -256,6 +265,21 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     if removed > 0 {
         log_message(silent, &format!("Removed {} exact duplicate events.", removed));
     }
+
+    // Name the creators the parsers could only number (auditd, pacct, pre-Windows 10 4688).
+    let resolved = hunt::tree::resolve_parents(&mut all_events);
+    if resolved > 0 {
+        log_message(silent, &format!("Resolved the parent process of {} rows by creator PID.", resolved));
+    }
+
+    // Hunt over the whole timeline (rows outside the window feed the tree but report nothing).
+    let findings = if hunt {
+        let s = start_time.as_deref().and_then(|s| utils::parse_toi_bound(s, false));
+        let e = end_time.as_deref().and_then(|e| utils::parse_toi_bound(e, true));
+        Some(hunt::run(&all_events, s.as_deref(), e.as_deref()))
+    } else {
+        None
+    };
     let pre_filter_count = all_events.len();
 
     // Apply Time of Interest (TOI) filter if requested
@@ -275,6 +299,14 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let sorted_timeline = timeline::create_timeline(filtered_events, vec![]);
     log_message(silent, &format!("Saving timeline to: {}", output));
     timeline::export_timeline(&sorted_timeline, output, silent)?;
+
+    if let Some(findings) = findings {
+        hunt::export_findings(&findings, &hunt_output)?;
+        log_message(silent, &format!("🔎 Hunt: {} findings saved to: {}", findings.len(), hunt_output));
+        for (rule, n) in hunt::summary(&findings) {
+            log_message(silent, &format!("   {:<28} {}", rule, n));
+        }
+    }
 
     // Show total extracted events at the end
     log_message(silent, "✅ Processing completed successfully!");
@@ -299,6 +331,7 @@ mod tests {
             processname: proc_name.to_string(),
             commandline: Some(cmd.to_string()),
             parentprocessname: "bash".to_string(),
+            meta: None,
         }
     }
 

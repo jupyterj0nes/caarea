@@ -71,6 +71,7 @@ pub fn parse_ps_lstart_file(file_path: &Path, computer_name: &str, tz: &HostTime
                 processname: process_name,
                 commandline: Some(command),
                 parentprocessname: "N/A".to_string(),
+                meta: None,
             });
         }
     }

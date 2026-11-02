@@ -59,6 +59,7 @@ pub fn events(hive: &Hive, computer: &str, source: &str) -> Vec<Event> {
             processname: format!("MFT entry {} ({})", entry, key.name),
             commandline: Some(details),
             parentprocessname: source.to_string(),
+            meta: None,
         });
     }
     events

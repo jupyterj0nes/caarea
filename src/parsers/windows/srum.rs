@@ -112,6 +112,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Result<SrumResult, String> {
         processname: app,
         commandline: Some(details),
         parentprocessname: source.clone(),
+        meta: None,
     };
 
     if let (Some(table), Ok(mut rows)) = (db.table(APP_TIMELINE), db.rows(APP_TIMELINE)) {

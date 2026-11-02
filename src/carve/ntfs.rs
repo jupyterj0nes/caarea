@@ -98,6 +98,7 @@ pub fn indx_events(entries: &[IndxEntry], computer: &str, source: &str) -> Vec<E
                 e.file_ref & 0x0000_FFFF_FFFF_FFFF
             )),
             parentprocessname: source.to_string(),
+            meta: None,
         });
     }
     out
@@ -146,6 +147,7 @@ pub fn usn_events(rec: &UsnRecord, computer: &str, source: &str) -> Option<Event
         processname: exe,
         commandline: Some(format!("{} | USN {} | MFT #{}", description, crate::parsers::ntfs::usn::decode_reason(rec.reason), rec.entry)),
         parentprocessname: source.to_string(),
+        meta: None,
     })
 }
 

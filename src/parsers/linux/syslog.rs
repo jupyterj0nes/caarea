@@ -164,6 +164,7 @@ pub fn parse_syslog_file(file_path: &Path, default_computer: &str, tz: &HostTime
             processname: proc_name,
             commandline: Some(command),
             parentprocessname: parent.to_string(),
+            meta: None,
         });
     }
 

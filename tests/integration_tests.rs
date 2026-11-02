@@ -30,6 +30,7 @@ fn test_event_timeline_sorting() {
         processname: "cmd.exe".to_string(),
         commandline: Some("cmd.exe /c whoami".to_string()),
         parentprocessname: "explorer.exe".to_string(),
+        meta: None,
     };
     let e2 = Event {
         timestamp: "2024-12-31T23:59:59Z".to_string(),
@@ -42,6 +43,7 @@ fn test_event_timeline_sorting() {
         processname: r"\Device\HarddiskVolume2\Windows\notepad.exe".to_string(),
         commandline: None,
         parentprocessname: "N/A".to_string(),
+        meta: None,
     };
 
     let timeline = create_timeline(vec![e1.clone()], vec![e2.clone()]);
@@ -64,6 +66,7 @@ fn test_toi_window_filtering() {
             processname: "malware.exe".to_string(),
             commandline: None,
             parentprocessname: "N/A".to_string(),
+            meta: None,
         },
         Event {
             timestamp: "2025-08-25T14:30:00Z".to_string(),
@@ -76,6 +79,7 @@ fn test_toi_window_filtering() {
             processname: "powershell.exe".to_string(),
             commandline: Some("powershell.exe -enc ...".to_string()),
             parentprocessname: "cmd.exe".to_string(),
+            meta: None,
         },
         Event {
             timestamp: "2025-08-27T00:00:00Z".to_string(),
@@ -88,6 +92,7 @@ fn test_toi_window_filtering() {
             processname: "cleanup.exe".to_string(),
             commandline: None,
             parentprocessname: "taskeng.exe".to_string(),
+            meta: None,
         },
     ];
 

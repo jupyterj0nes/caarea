@@ -21,6 +21,7 @@ Written in Rust. One static binary for Windows, Linux and macOS. No mounting, no
 - **Gets the time right.** Every timestamp is converted to UTC. Linux logs that only carry wall-clock time (classic syslog, `dpkg.log`, `ps`) are corrected with the host's own time zone, found in the evidence (`/etc/timezone`, `/etc/localtime`, `timedatectl`).
 - **Tells you where a row came from.** Events that only exist in a shadow copy are tagged with the snapshot time; a live event and its snapshot twin are not shown twice. The same vocabulary will mark rows recovered from freed structures and from carving.
 - **Recovers what was deleted.** Freed registry cells and unused `$MFT` records are read by default; `--carve` scans the raw bytes of images, live volumes and pagefiles for hives, event log chunks, MFT and journal records and Prefetch files that no file system points to any more.
+- **Hunts when you ask.** `--hunt` rebuilds the process tree of every host and marks what contradicts the documented boot and logon tree, the parents that never create shells, dead creators and Linux service accounts opening shells, each with a score, the ATT&CK technique and the lineage. Findings go to their own CSV; the timeline stays as it is.
 - **Treats evidence as hostile.** Archives are unpacked into an isolated, per-run temporary folder; entries cannot escape it, symlinks are never followed, and packages with the same file name from different hosts never overwrite each other. The evidence itself is only ever read.
 
 ---
@@ -60,7 +61,7 @@ An RFC 4180 CSV with ten columns. Timestamps are UTC with a fixed width (`YYYY-M
 | `target_username` | Who it ran as, when different (`sudo`, `su`, services) |
 | `processname` | Binary, script, task or package |
 | `commandline` | Full command line or the details of the artifact |
-| `parentprocessname` | Parent process or launching component |
+| `parentprocessname` | Parent process or launching component. When the source only gave a PID (auditd, `pacct`, 4688 before Windows 10) and the creator's own row is in the timeline, the name is filled in as `/usr/bin/sudo (PID: 12493)` |
 
 Two real rows:
 
@@ -159,6 +160,39 @@ The scanner, the guarded sources and the structural validators are the [blockcar
 
 ---
 
+## Process hunting, when you ask for it
+
+`--hunt` runs a set of rules over the finished timeline and writes the hits to a second CSV next to it (`host.hunt.csv`, or `--hunt-output`). The timeline itself does not change: ten columns, same rows. Each finding carries a score (0 to 100), the ATT&CK technique, the lineage of the process and one sentence saying why it matters.
+
+```bash
+caarea -f workstation.E01 -o workstation.csv --hunt
+caarea -d /cases/acme/triage -o acme.csv --hunt --hunt-output acme.findings.csv --toi 2026-09-24T12:00:00Z
+```
+
+The rules only state what a documented source states. The expected-parent and allowed-children tables come from the SANS *Hunt Evil* poster (Lee and Pilkington) cross-checked with Elastic's *Unusual Parent-Child Relationship* rule, which contributes the field exceptions (Defender, Citrix, VMware, Omnissa, Sophos). A pair the tables do not mention gets no opinion.
+
+| Rule | Fires when | Score |
+| :--- | :--- | :--- |
+| `GEN-CORE-PARENT` | A core Windows process (`smss`, `csrss`, `wininit`, `winlogon`, `services`, `lsass`, `svchost`, `spoolsv`, `taskhostw`, `userinit`, `RuntimeBroker`, ...) was created by something other than its documented parent | 85 |
+| `GEN-RESTRICTED-PARENT` | `smss`, `wininit`, `winlogon`, `lsass`, `csrss`, `autochk`, `wermgr` or `conhost` created a process outside their closed list of children | 70 to 90 |
+| `GEN-OFFICE-SHELL`, `GEN-BROWSER-SHELL` | Office, a PDF reader or a browser launched a shell, script host or LOLBin | 75 to 85 |
+| `GEN-WEBSERVER-SHELL`, `GEN-DATABASE-SHELL` | `w3wp`, `httpd`, `nginx`, `php-cgi`, Tomcat, `sqlservr`, or on Linux `apache2`, `nginx`, `php-fpm`, `mysqld`, `postgres`, launched a shell | 85 to 95 |
+| `GEN-SVCACCT-SHELL` | A Linux service account (`www-data`, `apache`, `mysql`, `postgres`, ...) ran a shell, `nc`, `curl`, `python` | 80 |
+| `GEN-SERVICES-SHELL`, `GEN-REMOTE-EXEC` | `services.exe` started a shell as a service binary; `PSEXESVC` or a clone launched anything | 70 to 80 |
+| `GEN-ACCESSIBILITY-BACKDOOR` | `winlogon`, `utilman`, `sethc`, `osk`, `narrator`, `magnify`, `DisplaySwitch` or `AtBroker` launched a shell at the logon screen | 95 |
+| `GEN-SPOOLER-SHELL`, `GEN-WMI-EXEC` | The print spooler launched a shell; `WmiPrvSE` launched one (remote WMI execution, also used by SCCM) | 60 to 85 |
+| `GEN-SVCHOST-SHELL` | A service host launched `cmd`, `powershell`, `mshta`, `wscript`, `cscript`, `certutil` or `bitsadmin`. Scheduled tasks do this legitimately, so it is a pointer, not a verdict | 35 |
+| `GEN-EXPLORER-SYSTEM` | A child of `explorer.exe` was created by a SYSTEM or service token | 65 |
+| `GEN-PARENT-GONE` | The creator PID belongs to a process that had already exited: PID reuse the logs do not cover, or a spoofed parent | 55 |
+| `GEN-DUPLICATE-CORE` | A second `lsass`, `services`, `wininit` or `LsaIso` started in the same boot | 75 |
+| `GEN-CRON-SCRATCH` | cron ran a binary from `/tmp`, `/dev/shm`, `/var/tmp` | 75 |
+
+**The process tree behind it.** Before the rules run, CAAREA rebuilds the process tree of every host from the creator PIDs (Security 4688 `ProcessId`, Sysmon `ParentProcessId` and the GUID pair, auditd and `pacct` `ppid`) and the exits (4689, Sysmon 5). A parent is the latest start of that PID before the child; a parent that had exited is reported, not guessed. The tree also completes the timeline where the parser could only give a number: auditd and `pacct` rows show `/usr/bin/sudo (PID: 12493)` instead of `PID: 12493`, and Security 4688 from Windows 7 / 2008 R2 / 2012, which has no `ParentProcessName`, gets the creator's name the same way. A resolved name always keeps its `(PID: n)` so it can be told from one the log wrote. Rows outside a `--toi` window still feed the tree; they just report nothing.
+
+**What the rules need.** Genealogy only fires on sources that name a parent: Security 4688, Sysmon 1, auditd `execve`, `pacct`. Prefetch, BAM, Amcache, UserAssist and SRUM have no parent, so they wait for the naming, path and rarity rules of the next phases. On a Windows host with the default audit policy there is no 4688 at all; with 4688 but without command-line auditing the command line is empty.
+
+---
+
 ## Time zones, honestly
 
 Most sources carry their own zone (EVTX, registry FILETIMEs, audit, pacct, RFC 3339 syslog, web logs with offset) and are simply converted to UTC.
@@ -192,6 +226,8 @@ caarea [OPTIONS] --output <PATH>
       --tz <ZONE>             Time zone of the Linux hosts for zone-less logs (default: detected)
       --carve                 Also scan raw bytes (images, live volumes, pagefiles, blobs) for structures
                               no file system points to; off by default, reads the whole image
+      --hunt                  Run the process hunt over the timeline; findings in <output>.hunt.csv
+      --hunt-output <PATH>    Destination CSV for the findings
       --stage-dir <PATH>      Keep the artifacts extracted from images, live volumes and archives here
       --overwrite             Replace the output file if it exists
   -s, --silent                Print nothing but errors
@@ -202,7 +238,7 @@ caarea [OPTIONS] --output <PATH>
 
 ## How it is tested
 
-`cargo test` runs 64 tests. They include real-layout records for every binary format, real auditd lines, the public TZif files of two zones, and safety tests that try to break out of the staging folder.
+`cargo test` runs 133 tests. They include real-layout records for every binary format, real auditd lines, the public TZif files of two zones, and safety tests that try to break out of the staging folder.
 
 Beyond the unit tests, the parsers were checked against:
 

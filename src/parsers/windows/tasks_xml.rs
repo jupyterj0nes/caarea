@@ -147,6 +147,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
                 processname: first,
                 commandline: Some(details),
                 parentprocessname: "Task Scheduler".to_string(),
+                meta: None,
             }
         })
         .collect()

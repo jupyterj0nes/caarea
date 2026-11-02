@@ -61,6 +61,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
             processname: p,
             commandline: Some(format!("Executed before {} (RecentFileCache entry {} of {}, file time)", mtime, i + 1, n)),
             parentprocessname: "RecentFileCache.bcf".to_string(),
+            meta: None,
         })
         .collect()
 }

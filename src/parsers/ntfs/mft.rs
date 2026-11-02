@@ -346,6 +346,7 @@ pub fn standalone_record_events(raw: &[u8], computer: &str, source: &str) -> Vec
                 processname: full.clone(),
                 commandline: Some(format!("File {} (record carved): {}", kind, notes.join("; "))),
                 parentprocessname: source.to_string(),
+                meta: None,
             });
         }
     };
@@ -453,6 +454,7 @@ pub fn parse_mft_file(path: &Path, computer: &str) -> Result<MftResult, String> 
                     notes.join("; ")
                 )),
                 parentprocessname: source.clone(),
+                meta: None,
             });
         };
         if let Some(c) = created.clone() {

@@ -137,6 +137,7 @@ pub fn parse_jumplist(path: &Path, computer: &str) -> Vec<Event> {
             processname: target.clone(),
             commandline: Some(format!("Opened by app {}:{}{}", app, extra, details)),
             parentprocessname: name.clone(),
+            meta: None,
         });
     }
     events
@@ -165,6 +166,7 @@ pub fn parse_lnk(path: &Path, computer: &str) -> Vec<Event> {
         processname: target,
         commandline: Some(format!("Shortcut used (file time):{}", details)),
         parentprocessname: name,
+        meta: None,
     }]
 }
 

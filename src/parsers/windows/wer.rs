@@ -101,6 +101,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
         processname,
         commandline: Some(details),
         parentprocessname: folder,
+        meta: None,
     }]
 }
 

@@ -53,6 +53,7 @@ pub fn parse_segfault_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
                     processname: proc_name,
                     commandline: Some(format!("Kernel Segfault: {}", details)),
                     parentprocessname: "kernel".to_string(),
+                    meta: None,
                 });
             }
         }

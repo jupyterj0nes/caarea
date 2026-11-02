@@ -267,6 +267,7 @@ pub fn parse_buffer(data: &[u8], source: &str, computer: &str, dirs: &HashMap<u6
             processname: exe_for_pf.unwrap_or_else(|| full.clone()),
             commandline: Some(format!("{} | USN {} | MFT #{} | {}", description, decode_reason(rec.reason), rec.entry, full)),
             parentprocessname: source.to_string(),
+            meta: None,
         });
     }
     UsnResult { events, records, prefetch_rows }

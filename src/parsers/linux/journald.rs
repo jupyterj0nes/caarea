@@ -96,6 +96,7 @@ pub fn parse_file(path: &Path, computer_hint: &str) -> Vec<Event> {
             processname: proc,
             commandline: Some(cmd),
             parentprocessname: parent,
+            meta: None,
         };
 
         let tool = if comm.is_empty() { ident.as_str() } else { comm.as_str() };

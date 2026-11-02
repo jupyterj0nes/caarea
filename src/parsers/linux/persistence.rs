@@ -62,6 +62,7 @@ pub fn parse_cron_table_file(file_path: &Path, computer_name: &str) -> Vec<Event
                     processname: process_name,
                     commandline: Some(format!("User Cron: {} (Spool: {})", command, filename)),
                     parentprocessname: "crond".to_string(),
+                    meta: None,
                 });
             }
         } else {
@@ -82,6 +83,7 @@ pub fn parse_cron_table_file(file_path: &Path, computer_name: &str) -> Vec<Event
                     processname: process_name,
                     commandline: Some(format!("System Cron.d: {} (File: {})", command, filename)),
                     parentprocessname: "crond".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -145,6 +147,7 @@ pub fn parse_systemd_service_file(file_path: &Path, computer_name: &str) -> Vec<
             processname: proc_name,
             commandline: Some(format!("Systemd Unit: {} (Desc: {}, Exec: {})", filename, description, exec)),
             parentprocessname: "systemd".to_string(),
+            meta: None,
         });
     }
 
@@ -170,6 +173,7 @@ pub fn parse_timer_stamp(file_path: &Path, computer_name: &str) -> Vec<Event> {
         processname: unit.trim_end_matches(".timer").to_string(),
         commandline: Some(format!("systemd timer last fired: {} (stamp file time)", unit)),
         parentprocessname: "systemd".to_string(),
+        meta: None,
     }]
 }
 
@@ -211,6 +215,7 @@ pub fn parse_timer_unit(file_path: &Path, computer_name: &str) -> Vec<Event> {
         processname: unit,
         commandline: Some(format!("systemd timer {}: {} ({})", filename, schedule.join(", "), description)),
         parentprocessname: "systemd".to_string(),
+        meta: None,
     }]
 }
 
@@ -266,6 +271,7 @@ pub fn parse_running_processes_paths(file_path: &Path, computer_name: &str) -> V
                         processname: target.split_whitespace().next().unwrap_or(target).to_string(),
                         commandline: Some(format!("Executing Binary Link: {}", target)),
                         parentprocessname: "N/A".to_string(),
+                        meta: None,
                     });
                 }
             }

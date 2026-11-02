@@ -79,6 +79,7 @@ pub fn parse_bash_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
             processname: proc_name,
             commandline: Some(trimmed.to_string()),
             parentprocessname: "bash".to_string(),
+            meta: None,
         });
 
         current_epoch = None;
@@ -107,6 +108,7 @@ pub fn parse_fish_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
                     processname: c.split_whitespace().next().unwrap_or("").to_string(),
                     commandline: Some(c),
                     parentprocessname: "fish".to_string(),
+                    meta: None,
                 });
             }
         }
@@ -164,6 +166,7 @@ pub fn parse_zsh_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
                         processname: proc_name,
                         commandline: Some(command.to_string()),
                         parentprocessname: "zsh".to_string(),
+                        meta: None,
                     });
                 }
             }
@@ -226,6 +229,7 @@ pub fn parse_viminfo(file_path: &Path, computer_name: &str) -> Vec<Event> {
                         processname: "vim".to_string(),
                         commandline: Some(format!("Vim Command: {}", trimmed)),
                         parentprocessname: "vim".to_string(),
+                        meta: None,
                     });
                 }
             }
@@ -249,6 +253,7 @@ pub fn parse_viminfo(file_path: &Path, computer_name: &str) -> Vec<Event> {
                             processname: "vim".to_string(),
                             commandline: Some(format!("Edited File: {} (mark {}, line {})", file_edited, mark, line_num)),
                             parentprocessname: "vim".to_string(),
+                            meta: None,
                         });
                     }
                 }
@@ -268,6 +273,7 @@ pub fn parse_viminfo(file_path: &Path, computer_name: &str) -> Vec<Event> {
                         processname: "vim".to_string(),
                         commandline: Some(format!("Opened/Edited File: {}", file_edited)),
                         parentprocessname: "vim".to_string(),
+                        meta: None,
                     });
                 }
             }

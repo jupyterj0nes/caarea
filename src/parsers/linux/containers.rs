@@ -73,6 +73,7 @@ fn docker(v: &Value, computer: &str, source: &str) -> Vec<Event> {
             if entrypoint.is_empty() { String::new() } else { format!(" entrypoint {}", entrypoint) }
         )),
         parentprocessname: format!("dockerd [{}]", source),
+        meta: None,
     };
     let mut out = Vec::new();
     if let Some(t) = time(&s(v, &["Created"])) {
@@ -108,6 +109,7 @@ fn containerd(v: &Value, computer: &str, source: &str, path: &Path) -> Vec<Event
         processname: args.split_whitespace().next().unwrap_or("").to_string(),
         commandline: Some(format!("containerd task {}{}: image {} args {} (config time)", cname, if pod.is_empty() { String::new() } else { format!(" in pod {}", pod) }, image, args)),
         parentprocessname: format!("containerd [{}]", source),
+        meta: None,
     }]
 }
 
@@ -130,6 +132,7 @@ fn podman(v: &Value, computer: &str, source: &str) -> Vec<Event> {
                     processname: names.split_whitespace().next().unwrap_or(&id).to_string(),
                     commandline: Some(format!("Podman container created {} ({}): image {}", names, id, image)),
                     parentprocessname: format!("podman [{}]", source),
+                    meta: None,
                 });
             }
         }

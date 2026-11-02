@@ -49,6 +49,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
                 processname: first.to_string(),
                 commandline: Some(line.to_string()),
                 parentprocessname: format!("{} (line {} of {}, file time)", source, i + 1, n),
+                meta: None,
             }
         })
         .collect()

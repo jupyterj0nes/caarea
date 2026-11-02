@@ -72,6 +72,7 @@ pub fn parse_text(text: &str, source: &str, computer: &str) -> Vec<Event> {
             processname: path,
             commandline: Some(details),
             parentprocessname: source.to_string(),
+            meta: None,
         });
     }
     events

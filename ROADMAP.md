@@ -317,7 +317,55 @@ and caarea depend on it; each tool keeps its own emission and dedup.
 | 8 Linux carving | 2 |
 | 9 Heavy formats | 3 |
 | 10 Shared crate | 2.5 |
-| **Total** | **21.5** |
+| 11 Process hunting | 5 |
+| **Total** | **26.5** |
+
+## Phase 11: process hunting (5 days)
+
+Status (2026-11-02): H0 and H1 shipped. `src/hunt/{mod,tree,genealogy}.rs`, `--hunt`,
+`--hunt-output`. `Event` carries `meta: Option<Box<ProcMeta>>` (creator PID, Sysmon GUIDs,
+parent command line, integrity, token elevation, logon id, hashes, original file name),
+never exported. Parent resolution by creator PID runs on every timeline (auditd, pacct,
+pre-Windows 10 4688). Validated on DEV-SRV01 (Security.evtx, 129 4688 rows: the planted
+task and service found, nothing else flagged) and LEO-LNX01 (165 of 237 execve rows
+resolved to a named parent, 0 findings on a clean host).
+
+Rules state only what a documented source states: SANS *Hunt Evil* (Lee and Pilkington,
+2018) for the boot tree and the per-process facts, Elastic's *Unusual Parent-Child
+Relationship* for the closed children lists and the field exceptions, EchoTrail only to
+check the tables (its terms forbid copying the data), ProblemChild (Filar and French,
+arXiv 2008.04676) for the local-prevalence idea of H4.
+
+- **H0 (done, 0.5 d)**: internal process fields, process tree per host (PID + time, GUID
+  when Sysmon), exits close the interval, `ancestors`, `lineage`, `resolve_parents`.
+- **H1 (done, 1 d)**: genealogy rules, see README table. Findings CSV
+  (`timestamp, computer, rule_id, category, score, mitre, title, explanation, lineage,
+  pid, processname, commandline, parentprocessname, subject_username, artifact, related`).
+- **H2 (1 d)**: naming and path. System binary outside `System32`/`SysWOW64`/`WinSxS`,
+  edit-distance-1 and homoglyph names against the system binary list, random names
+  (entropy, no vowels, mixed-case alphanumerics), 1 or 2 character names, GUID names,
+  double extension, RTLO, padding spaces, Unicode in executable names, scratch and
+  user-writable directories on both platforms, fake kernel threads from a user path.
+- **H3 (1 d)**: command line. PowerShell encoded / hidden / bypass / download cradles with
+  Base64 decoded and rescanned; `certutil`, `bitsadmin`, `mshta`, `regsvr32`, `rundll32`,
+  `wmic`, `schtasks`, `sc`, `net user`, `reg add Run`; ransomware preparation (`vssadmin`,
+  `wbadmin`, `bcdedit`, `wmic shadowcopy`); anti-forensics (`wevtutil cl`, `fsutil usn
+  deletejournal`, `history -c`, `chattr`); credential access (`sekurlsa`, `procdump
+  lsass`, `comsvcs MiniDump`, `ntdsutil`, `reg save sam`); Linux cradles (`curl|sh`,
+  `base64 -d|sh`, `nc -e`, `/dev/tcp`, `python pty`, `LD_PRELOAD`); length, IP/URL,
+  caret and quote obfuscation, `%COMSPEC%`.
+- **H4 (1 d)**: correlation. Drop (`$MFT`/USN create) then execute within N seconds;
+  execute then delete; discovery burst from one parent in 5 minutes; 7045 / 4698 then
+  the same path running; log cleared after a flagged row; row that only exists recovered
+  (VSS, deleted, carved) raises the score; first execution outside working hours; fleet
+  rarity (process on one host out of five or more, same name with different Amcache
+  SHA-1); local prevalence of parent-child pairs (ProblemChild).
+- **H5 (0.5 d)**: `--hunt-min-score`, `--hunt-allow <file>` (client allowlist, glob on
+  parent/child/path), `--hunt-report <md>` (per host, grouped by lineage, ranked),
+  `--hunt-only -f timeline.csv` (re-hunt a CSV with the reduced information it holds),
+  validation on EVTX-ATTACK-SAMPLES by technique.
+- **H6 (optional)**: Sigma `process_creation` subset (`Image`, `CommandLine`,
+  `ParentImage`, `User`, `contains|startswith|endswith|all|re`).
 
 ## Open decisions
 

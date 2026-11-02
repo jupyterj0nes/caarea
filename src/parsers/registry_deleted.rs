@@ -133,6 +133,7 @@ pub fn events_for_hive(bytes: &[u8], computer: &str, user: &str, source: &str) -
         processname: proc,
         commandline: Some(details),
         parentprocessname: source.to_string(),
+        meta: None,
     };
 
     for dk in &scan.deleted_keys {

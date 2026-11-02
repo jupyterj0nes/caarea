@@ -90,6 +90,7 @@ pub fn parse_xbel_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
                             processname: proc_name,
                             commandline: Some(format!("App: {}, Opened: {}, Exec: {}", app_name, clean_path, app_exec)),
                             parentprocessname: "desktop_gui".to_string(),
+                            meta: None,
                         });
                     }
                 }
