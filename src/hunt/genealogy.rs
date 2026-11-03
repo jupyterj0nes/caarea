@@ -12,7 +12,6 @@ use super::Finding;
 use crate::parsers::evtx::Event;
 use crate::provenance::artifact_base;
 
-const CATEGORY: &str = "genealogy";
 
 /// Core Windows processes and the only parents that create them.
 const EXPECTED_PARENTS: &[(&str, &[&str])] = &[
@@ -364,10 +363,10 @@ fn finding(events: &[Event], tree: &ProcessTree, i: usize, rule: &'static str, s
 fn finding_related(events: &[Event], tree: &ProcessTree, i: usize, rule: &'static str, score: u8, mitre: &'static str, title: String, explanation: String, related: String) -> Finding {
     let e = &events[i];
     Finding {
+        row: i,
         timestamp: e.timestamp.clone(),
         computer: e.computer.clone(),
         rule_id: rule,
-        category: CATEGORY,
         score,
         mitre,
         title,

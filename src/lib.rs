@@ -280,29 +280,33 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     } else {
         None
     };
+    let tails = findings.as_deref().map(|f| hunt::tails(all_events.len(), f)).unwrap_or_default();
     let pre_filter_count = all_events.len();
 
-    // Apply Time of Interest (TOI) filter if requested
-    let filtered_events = utils::filter_by_toi(all_events, start_time.as_deref(), end_time.as_deref());
+    // Apply Time of Interest (TOI) filter if requested; the tails travel with their rows
+    let mut rows: Vec<(Event, hunt::Tail)> = all_events.into_iter().zip(tails.into_iter().chain(std::iter::repeat(hunt::Tail::default()))).collect();
+    rows = utils::filter_rows_by_toi(rows, start_time.as_deref(), end_time.as_deref());
     if start_time.is_some() || end_time.is_some() {
         log_message(
             silent,
             &format!(
                 "Filtered {} events to {} events within Time of Interest window.",
                 pre_filter_count,
-                filtered_events.len()
+                rows.len()
             ),
         );
     }
 
     // Sort and export the timeline
-    let sorted_timeline = timeline::create_timeline(filtered_events, vec![]);
+    rows.sort_by(|a, b| a.0.timestamp.cmp(&b.0.timestamp));
+    let (sorted_timeline, row_tails): (Vec<Event>, Vec<hunt::Tail>) = rows.into_iter().unzip();
     log_message(silent, &format!("Saving timeline to: {}", output));
-    timeline::export_timeline(&sorted_timeline, output, silent)?;
+    timeline::export_timeline(&sorted_timeline, &row_tails, output, silent)?;
 
     if let Some(findings) = findings {
         hunt::export_findings(&findings, &hunt_output)?;
-        log_message(silent, &format!("🔎 Hunt: {} findings saved to: {}", findings.len(), hunt_output));
+        let marked = row_tails.iter().filter(|t| !t.hunt.is_empty()).count();
+        log_message(silent, &format!("🔎 Hunt: {} findings saved to: {} ({} timeline rows carry a hunt state)", findings.len(), hunt_output, marked));
         for (rule, n) in hunt::summary(&findings) {
             log_message(silent, &format!("   {:<28} {}", rule, n));
         }

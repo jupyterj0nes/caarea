@@ -137,15 +137,20 @@ pub fn escape_csv(val: &str) -> String {
 /// Filters events by a Time of Interest (TOI) window. Both ends are inclusive and may be
 /// given in any format accepted by [`parse_toi_bound`].
 pub fn filter_by_toi(events: Vec<Event>, start: Option<&str>, end: Option<&str>) -> Vec<Event> {
+    filter_rows_by_toi(events.into_iter().map(|e| (e, ())).collect(), start, end).into_iter().map(|(e, _)| e).collect()
+}
+
+/// Same window, on rows that carry something along with the event (its analysis tail).
+pub fn filter_rows_by_toi<T>(rows: Vec<(Event, T)>, start: Option<&str>, end: Option<&str>) -> Vec<(Event, T)> {
     if start.is_none() && end.is_none() {
-        return events;
+        return rows;
     }
     let start_norm = start.and_then(|s| parse_toi_bound(s, false));
     let end_norm = end.and_then(|e| parse_toi_bound(e, true));
 
-    events
+    rows
         .into_iter()
-        .filter(|e| {
+        .filter(|(e, _)| {
             let ts = e.timestamp.as_str();
             if let Some(ref s) = start_norm {
                 if ts < s.as_str() {

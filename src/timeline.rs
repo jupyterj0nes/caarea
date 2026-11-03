@@ -1,3 +1,4 @@
+use crate::hunt::{Tail, EMPTY_TAIL};
 use crate::parsers::evtx::Event;
 use crate::utils::escape_csv;
 use std::fs::File;
@@ -19,23 +20,27 @@ pub fn create_timeline(mut events: Vec<Event>, mut registry: Vec<Event>) -> Vec<
     events
 }
 
-/// Exports the timeline to a CSV file
-pub fn export_timeline(events: &[Event], output_file: &str, silent: bool) -> std::io::Result<()> {
+/// Header of the timeline: the ten event columns and the analysis tail.
+pub const HEADER: &str = "\"timestamp\",\"computer\",\"artifact\",\"event_id\",\"pid\",\"subject_username\",\"target_username\",\"processname\",\"commandline\",\"parentprocessname\",\"hunt\",\"hunt_score\",\"hunt_why\",\"verdict\",\"notes\"";
+
+/// Number of columns every timeline has: ten of the event, five of the tail.
+pub const COLUMNS: usize = 15;
+
+/// Exports the timeline to a CSV file: the ten event columns, then the tail of each row.
+/// `tails` lines up with `events`; where it is shorter (no hunt) the tail is empty.
+pub fn export_timeline(events: &[Event], tails: &[Tail], output_file: &str, silent: bool) -> std::io::Result<()> {
     let file = File::create(output_file)?;
     let mut writer = BufWriter::new(file);
 
-    // Write the CSV header with unified artifact column
-    writeln!(
-        writer,
-        "\"timestamp\",\"computer\",\"artifact\",\"event_id\",\"pid\",\"subject_username\",\
-        \"target_username\",\"processname\",\"commandline\",\"parentprocessname\""
-    )?;
+    writeln!(writer, "{}", HEADER)?;
 
-    // Save each event to the file with properly escaped CSV cells
-    for event in events {
+    // Save each event to the file with properly escaped CSV cells, then its tail
+    // (bare `,,,,,` when nothing judged the row).
+    for (i, event) in events.iter().enumerate() {
+        let tail = tails.get(i).map(Tail::csv).unwrap_or_else(|| EMPTY_TAIL.to_string());
         writeln!(
             writer,
-            "\"{}\",\"{}\",\"{}\",{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
+            "\"{}\",\"{}\",\"{}\",{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"{}",
             escape_csv(&event.timestamp),
             escape_csv(&event.computer),
             escape_csv(&event.artifact),
@@ -45,7 +50,8 @@ pub fn export_timeline(events: &[Event], output_file: &str, silent: bool) -> std
             escape_csv(&event.target_username),
             escape_csv(&event.processname),
             escape_csv(event.commandline.as_deref().unwrap_or("N/A")),
-            escape_csv(&event.parentprocessname)
+            escape_csv(&event.parentprocessname),
+            tail
         )?;
     }
 

