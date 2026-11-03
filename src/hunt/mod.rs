@@ -220,11 +220,11 @@ impl Finding {
     }
 
     /// One clause of `hunt_why`: `rule GEN-OFFICE-SHELL (high): winword.exe launched
-    /// cmd.exe [T1566.001]`, and `(rarity not measured)` when the rule adds nothing yet.
+    /// cmd.exe [T1566.001]`, and `, rarity not measured` when the rule adds nothing yet.
     pub fn clause(&self) -> String {
         let mut s = format!("rule {} ({}): {} [{}]", self.rule_id, self.level().word(), self.title, self.mitre);
         if self.rarity().is_none() {
-            s.push_str(" (rarity not measured)");
+            s.push_str(", rarity not measured");
         }
         s
     }
@@ -480,14 +480,19 @@ mod tests {
         let t = tails(events.len(), std::slice::from_ref(&unmeasured));
         assert_eq!(t[1].hunt, HUNT_CANDIDATE);
         assert_eq!(t[1].hunt_score, Some(0));
-        assert!(t[1].hunt_why.starts_with("rule CMD-FUTURE-RULE (medium): creator gone [T1134.004] (rarity not measured); "), "{}", t[1].hunt_why);
+        assert!(t[1].hunt_why.starts_with("rule CMD-FUTURE-RULE (medium): creator gone [T1134.004], rarity not measured; "), "{}", t[1].hunt_why);
 
         // contributions add and cap at 100
         let mut a = findings[0].clone();
         a.rule_id = "GEN-WEBSERVER-SHELL";
         let mut b = findings[0].clone();
         b.rule_id = "GEN-ACCESSIBILITY-BACKDOOR";
-        let t = tails(events.len(), &[a, b]);
+        let mut c = findings[0].clone();
+        c.rule_id = "GEN-BROWSER-SHELL";
+        let two = rarity::points("GEN-WEBSERVER-SHELL").unwrap() as u32 + rarity::points("GEN-ACCESSIBILITY-BACKDOOR").unwrap() as u32;
+        let t = tails(events.len(), &[a.clone(), b.clone()]);
+        assert_eq!(t[1].hunt_score, Some(two.min(100) as u8));
+        let t = tails(events.len(), &[a, b, c]);
         assert_eq!(t[1].hunt_score, Some(100));
     }
 }

@@ -4,8 +4,9 @@
 //! scale, `-10 · log10` of a probability, 0 to 100. A statistical test contributes
 //! `-10 · log10(q)`. A rule contributes the same scale **measured, not chosen**: the
 //! probability is how often the pattern fires on the rows of the reference timelines. One hit
-//! in 128 rows is 21 points, one in a thousand 30; a pattern that never fired on the reference
-//! rows gets 90, masstin's convention. A rule's catalogue score (the author's confidence) is
+//! in 128 rows is 21 points, one in a thousand 30. A pattern that never fired is not "never":
+//! the corpus bounds what it can say, so it gets `-10 · log10(1 / (rows + 1))`, 38 points on
+//! the 5,936 reference rows (the convention of the four tools, masstin's `docs/csv-format.md`). A rule's catalogue score (the author's confidence) is
 //! not a `hunt_score` and stays in the code and in the findings table.
 //!
 //! The table below is written by `scripts/measure_rarity.ps1`: it runs `caarea --hunt` over the
@@ -20,8 +21,14 @@ pub const REFERENCE: &str = "RangeForge lab hosts DEV-SRV01 (Windows, Security 4
 /// Rows of the reference timelines (both hosts).
 pub const REFERENCE_ROWS: u32 = 5_936;
 
-/// Points of a pattern that never fired on the reference rows.
-pub const NEVER_FIRED: u8 = 90;
+/// Top of the scale.
+pub const SCORE_MAX: u8 = 100;
+
+/// Points of a pattern that never fired on `rows` reference rows: the bound the corpus
+/// gives, `-10 · log10(1 / (rows + 1))`.
+pub fn never_fired(rows: u32) -> u8 {
+    points_for(1, rows + 1)
+}
 
 /// Hits of every rule pattern on the reference rows. The key is the rule id, with
 /// `/pattern` when the rule has several (`PATH-SCRATCH/temp`, `NAM-RANDOM/hex`).
@@ -89,14 +96,17 @@ pub const MEASURED: &[(&str, u32)] = &[
 ];
 
 /// The points of a pattern that fired `hits` times on `rows` reference rows: `-10 · log10
-/// (hits / rows)`, rounded, 0 to `NEVER_FIRED`; `NEVER_FIRED` when it never fired.
+/// (hits / rows)`, rounded, 0 to `SCORE_MAX`; the corpus bound when it never fired.
 pub fn points_for(hits: u32, rows: u32) -> u8 {
-    if hits == 0 || rows == 0 {
-        return NEVER_FIRED;
+    if rows == 0 {
+        return 0;
+    }
+    if hits == 0 {
+        return never_fired(rows);
     }
     let p = hits as f64 / rows as f64;
     let s = (-10.0 * p.log10()).round();
-    s.clamp(0.0, NEVER_FIRED as f64) as u8
+    s.clamp(0.0, SCORE_MAX as f64) as u8
 }
 
 /// The points a rule pattern adds to `hunt_score`; None when the pattern was never measured.
@@ -110,14 +120,17 @@ mod tests {
 
     #[test]
     fn test_points_follow_masstins_scale() {
-        assert_eq!(points_for(0, 5_936), NEVER_FIRED);
+        assert_eq!(points_for(0, 5_936), 38);
+        assert_eq!(never_fired(12_183), 41);
+        assert_eq!(points_for(0, 0), 0);
         assert_eq!(points_for(1, 128), 21);
         assert_eq!(points_for(1, 1_000), 30);
         assert_eq!(points_for(1, 100), 20);
         assert_eq!(points_for(500, 1_000), 3);
         assert_eq!(points_for(1_000, 1_000), 0);
         assert_eq!(points_for(2_000, 1_000), 0);
-        assert_eq!(points_for(1, 4_000_000_000), NEVER_FIRED);
+        assert_eq!(points_for(1, 4_000_000_000), 96);
+        assert_eq!(points_for(0, 4_000_000_000), 96);
     }
 
     #[test]

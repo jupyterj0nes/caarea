@@ -382,7 +382,7 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   `hunt_why` says `(rarity not measured)`. The catalogue score stays in the code and in the
   findings table (`score`, `level`, `rarity`, `pattern` columns). Measured on DEV-SRV01 and
   LEO-LNX01 (5,936 rows, planted rows left out): no pattern fired on a stock row, so every
-  rule is at 90 for now; the measurement needs a larger stock corpus (a workstation and a
+  rule is at 38 for now (the bound 5,936 rows give); the measurement needs a larger stock corpus (a workstation and a
   server with a week of ordinary use, no lab scripts) before the scores spread. The ten
   event columns were compared before and after on DEV-SRV01 and DeepBlueCLI: identical;
   on LEO-LNX01 only the twelve cron and systemd rows whose timestamp is the extraction

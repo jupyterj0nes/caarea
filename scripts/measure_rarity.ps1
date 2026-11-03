@@ -9,7 +9,7 @@
   script runs `caarea --hunt` over each reference evidence set, counts the hits of every rule
   pattern (signature + "/" + pattern of the findings table) on the rows that are not planted,
   and prints the MEASURED table; with -Write it rewrites the table and REFERENCE_ROWS in
-  rarity.rs in place. Rules that never fired keep 0 hits (90 points).
+  rarity.rs in place. Rules that never fired keep 0 hits (the corpus bound, -10*log10(1/(rows+1)): 38 on 5,936 rows).
 
   The lab scripts of scripts/lab plant activity on the RangeForge hosts; the rows they plant
   are recognised by $Planted and left out of the hits, not of the row count (a few dozen rows
@@ -43,9 +43,10 @@ $Planted = @(
 $PlantedRe = [regex]::new(($Planted -join '|'), 'IgnoreCase')
 
 function Get-Points([int] $Hits, [int] $Rows) {
-    if ($Hits -eq 0 -or $Rows -eq 0) { return 90 }
+    if ($Rows -eq 0) { return 0 }
+    if ($Hits -eq 0) { $Hits = 1; $Rows = $Rows + 1 }
     $s = [math]::Round(-10 * [math]::Log10($Hits / $Rows))
-    return [int][math]::Min(90, [math]::Max(0, $s))
+    return [int][math]::Min(100, [math]::Max(0, $s))
 }
 
 $Caarea = (Resolve-Path $Caarea).Path
