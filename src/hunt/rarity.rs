@@ -5,8 +5,8 @@
 //! `-10 · log10(q)`. A rule contributes the same scale **measured, not chosen**: the
 //! probability is how often the pattern fires on the rows of the reference timelines. One hit
 //! in 128 rows is 21 points, one in a thousand 30. A pattern that never fired is not "never":
-//! the corpus bounds what it can say, so it gets `-10 · log10(1 / (rows + 1))`, 38 points on
-//! the 5,936 reference rows (the convention of the four tools, masstin's `docs/csv-format.md`). A rule's catalogue score (the author's confidence) is
+//! the corpus bounds what it can say, so it gets `-10 · log10(1 / (rows + 1))`, 39 points on
+//! the 8,671 reference rows (the convention of the four tools, masstin's `docs/csv-format.md`). A rule's catalogue score (the author's confidence) is
 //! not a `hunt_score` and stays in the code and in the findings table.
 //!
 //! The table below is written by `scripts/measure_rarity.ps1`: it runs `caarea --hunt` over the
@@ -16,10 +16,10 @@
 //! the reference corpus change, and keep `REFERENCE` and `REFERENCE_ROWS` with the table.
 
 /// The reference corpus the table was measured on.
-pub const REFERENCE: &str = "RangeForge lab hosts DEV-SRV01 (Windows, Security 4688 with command lines, System, Application, PowerShell, Prefetch, Amcache, BAM, tasks, services, AppLocker, WMI) and LEO-LNX01 (Linux, auditd execve, journal, pacct, cron, shell histories), acquired 2026-10-28, with the activity planted by scripts/lab (C:\\Temp, C:\\RangeForge, Users\\Public\\rf_*, caarea-*, CaareaLabTask, CaareaSvc, /tmp/caarea-test) excluded";
+pub const REFERENCE: &str = "Two clean RangeForge lab hosts collected live on 2026-11-03, nothing planted: PTR-SRV01 (Windows Server 2016 with SQL Server Express and IIS: Security, System, Application, both PowerShell logs, TaskScheduler, WMI-Activity, Defender, AppLocker, WinRM, SRUM, Amcache, ShimCache, services, tasks, installed programs; the default audit policy, so 61 process-creation rows without command lines and no Sysmon) and LEO-LNX01 (Ubuntu 22.04: journal, syslog, dpkg and apt logs, cron, utmp, cloud-init; no auditd, no pacct). 8,671 rows. The genealogy rules, which need a parent, met only those 61 rows: their 39 is the corpus bound, not a measurement";
 
 /// Rows of the reference timelines (both hosts).
-pub const REFERENCE_ROWS: u32 = 5_936;
+pub const REFERENCE_ROWS: u32 = 8_671;
 
 /// Top of the scale.
 pub const SCORE_MAX: u8 = 100;
@@ -60,7 +60,7 @@ pub const MEASURED: &[(&str, u32)] = &[
     ("NAM-LOOKALIKE/homoglyph", 0),
     ("NAM-PADDED", 0),
     ("NAM-RANDOM/digits", 0),
-    ("NAM-RANDOM/generated", 0),
+    ("NAM-RANDOM/generated", 4),
     ("NAM-RANDOM/guid", 0),
     ("NAM-RANDOM/hex", 0),
     ("NAM-RANDOM/odd", 0),
@@ -87,11 +87,11 @@ pub const MEASURED: &[(&str, u32)] = &[
     ("PATH-SCRATCH/roaming", 0),
     ("PATH-SCRATCH/root-home", 0),
     ("PATH-SCRATCH/run", 0),
-    ("PATH-SCRATCH/temp", 0),
+    ("PATH-SCRATCH/temp", 4),
     ("PATH-SCRATCH/tmp", 0),
     ("PATH-SCRATCH/var", 0),
     ("PATH-SCRATCH/web-root", 0),
-    ("PATH-SCRATCH/windows-writable", 0),
+    ("PATH-SCRATCH/windows-writable", 18),
     ("PATH-WINDOWS-ROOT", 0),
 ];
 
@@ -120,7 +120,11 @@ mod tests {
 
     #[test]
     fn test_points_follow_masstins_scale() {
-        assert_eq!(points_for(0, 5_936), 38);
+        assert_eq!(points_for(0, 8_671), 39);
+        assert_eq!(never_fired(REFERENCE_ROWS), 39);
+        assert_eq!(points("PATH-SCRATCH/windows-writable"), Some(27), "18 of 8,671: dismhost, Defender updates and the cloud agent's startup scripts run from Windows\\TEMP on a stock server");
+        assert_eq!(points("NAM-RANDOM/generated"), Some(33));
+        assert_eq!(points("PATH-SCRATCH/temp"), Some(33));
         assert_eq!(never_fired(12_183), 41);
         assert_eq!(points_for(0, 0), 0);
         assert_eq!(points_for(1, 128), 21);

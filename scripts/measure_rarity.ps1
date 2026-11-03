@@ -9,7 +9,7 @@
   script runs `caarea --hunt` over each reference evidence set, counts the hits of every rule
   pattern (signature + "/" + pattern of the findings table) on the rows that are not planted,
   and prints the MEASURED table; with -Write it rewrites the table and REFERENCE_ROWS in
-  rarity.rs in place. Rules that never fired keep 0 hits (the corpus bound, -10*log10(1/(rows+1)): 38 on 5,936 rows).
+  rarity.rs in place. Rules that never fired keep 0 hits (the corpus bound, -10*log10(1/(rows+1)): 39 on 8,671 rows).
 
   The lab scripts of scripts/lab plant activity on the RangeForge hosts; the rows they plant
   are recognised by $Planted and left out of the hits, not of the row count (a few dozen rows

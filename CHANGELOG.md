@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Rule rarity measured on clean hosts
+
+- **The table in `src/hunt/rarity.rs` is measured on two clean lab hosts collected live** (PTR-SRV01, Windows Server 2016; LEO-LNX01, Ubuntu 22.04; 8,671 rows, nothing planted) instead of the attacked DEV-SRV01 with its plants filtered out. Three patterns fire on stock rows and are worth less than the bound: `PATH-SCRATCH/windows-writable` (18 hits, 27 points: `dismhost.exe`, Defender update stubs and the cloud agent's startup scripts run from `Windows\TEMP`), `PATH-SCRATCH/temp` (4, 33) and `NAM-RANDOM/generated` (4, 33: `SMSvcHost.exe`, `NGenTask.exe`, `BthUdTask.exe`). Every other pattern gets the bound the corpus gives, 39. The reference's limit is recorded with it: the default audit policy leaves the genealogy rules with 61 parentless process rows, so their 39 is a bound, not a measurement.
+
 ### The analysis tail speaks the convention of the four tools
 
 The five columns that close the timeline (`hunt`, `hunt_score`, `hunt_why`, `verdict`, `notes`) now say the same thing in masstin, caarea, faramir and allymacb: masstin's `docs/csv-format.md`, *The same tail in caarea, faramir and allymacb*, is the reference. A case tool maps the tail once.
