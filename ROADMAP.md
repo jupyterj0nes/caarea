@@ -323,7 +323,7 @@ and caarea depend on it; each tool keeps its own emission and dedup.
 
 ## Phase 11: process hunting (5 days)
 
-Status (2026-11-03): H0, H1 and H1b shipped. `src/hunt/{mod,tree,genealogy}.rs`, `--hunt`,
+Status (2026-11-03): H0, H1, H1b and H2 shipped. `src/hunt/{mod,tree,genealogy}.rs`, `--hunt`,
 `--hunt-output`. `Event` carries `meta: Option<Box<ProcMeta>>` (creator PID, Sysmon GUIDs,
 parent command line, integrity, token elevation, logon id, hashes, original file name),
 never exported. Parent resolution by creator PID runs on every timeline (auditd, pacct,
@@ -351,11 +351,27 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   `why_unusual, evidence` like masstin's and allymacb's. faramir's `flag, score, reasons`
   should move to the same tail with the same words for masstin's claim about the four
   tools to be true.
-- **H2 (1 d)**: naming and path. System binary outside `System32`/`SysWOW64`/`WinSxS`,
-  edit-distance-1 and homoglyph names against the system binary list, random names
-  (entropy, no vowels, mixed-case alphanumerics), 1 or 2 character names, GUID names,
-  double extension, RTLO, padding spaces, Unicode in executable names, scratch and
-  user-writable directories on both platforms, fake kernel threads from a user path.
+- **H2 (done, 1 d)**: naming and path, `src/hunt/{names,naming}.rs`. The directory
+  families and name classes are faramir's (`hunt/normalize.rs` there), ported so both tools
+  say the same of the same path; the system binary list is SANS *Hunt Evil* plus the
+  System32 LOLBins and services, with the few that live elsewhere (explorer, Defender,
+  .NET) listed with their folders. Rules: `NAM-SYSTEM-PATH`, `NAM-FAKE-KERNEL`,
+  `NAM-LOOKALIKE` (homoglyph anywhere, one edit away outside the system folders),
+  `NAM-DOUBLE-EXT`, `NAM-RTLO`, `NAM-PADDED`, `NAM-RANDOM`, `PATH-WINDOWS-ROOT`,
+  `PATH-SCRATCH`, `PATH-ARCHIVE-TEMP`, `PATH-ADS`, `PATH-REMOTE`; see the README table.
+  Found while validating on DeepBlueCLI's EVTX set (8 hosts, Windows 7 without 4689, logs
+  spanning years): the PID-only parent resolution handed a service's PID to whatever held
+  it before a reboot (179 false `GEN-CORE-PARENT`). Fixed by boot markers in the process
+  tree: Security 4608 and Kernel-General 12 are now parsed (`evtx:4608`, `evtx:12`) and,
+  with the first `smss.exe` / `wininit.exe` of a boot, close every PID of the host, with a
+  two-minute grace for the processes created before the marker is written. Windows 7
+  starts `dwm.exe` from the UxSms service (svchost), now in the table;
+  `GEN-EXPLORER-SYSTEM` needs a parent the log named. After the fixes the set gives the 12
+  Metasploit PsExec droppers in `C:\Windows` (`PATH-WINDOWS-ROOT` 70 + `NAM-RANDOM`),
+  one archive-temp run, chrome > msiexec, and the analyst's own scripts on the Desktop
+  at `review`; DEV-SRV01 adds the planted beacon script in `Users\Public` (70);
+  LEO-LNX01 the planted cron job in `/tmp` (70). Not done: a shared crate for the
+  classifiers (faramir and caarea each carry a copy).
 - **H3 (1 d)**: command line. PowerShell encoded / hidden / bypass / download cradles with
   Base64 decoded and rescanned; `certutil`, `bitsadmin`, `mshta`, `regsvr32`, `rundll32`,
   `wmic`, `schtasks`, `sc`, `net user`, `reg add Run`; ransomware preparation (`vssadmin`,

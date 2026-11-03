@@ -83,8 +83,8 @@ Two real rows (the empty tail is written bare, `,,,,,`, as masstin writes it):
 
 | Source | Events / keys | Notes |
 | :--- | :--- | :--- |
-| Security.evtx | 4688 process creation, 4689 process exit, 4697 service install, 4698-4702 task created / deleted / enabled / disabled / updated, 1102 audit log cleared | `DOMAIN\user`, PID from `NewProcessId`, task command pulled out of the task XML |
-| System.evtx | 7045 service installed, 7034 service crashed, 7036 service state change, 104 log cleared, MsiInstaller 1033/1034/11707/11724 | account from `AccountName` |
+| Security.evtx | 4688 process creation, 4689 process exit, 4608 startup (boot marker), 4697 service install, 4698-4702 task created / deleted / enabled / disabled / updated, 1102 audit log cleared | `DOMAIN\user`, PID from `NewProcessId`, task command pulled out of the task XML |
+| System.evtx | 7045 service installed, 7034 service crashed, 7036 service state change, 104 log cleared, Kernel-General 12 OS started (boot marker), MsiInstaller 1033/1034/11707/11724 | account from `AccountName` |
 | Application.evtx | 1000 application error, 1001 Windows Error Reporting | faulting binary, module, exception |
 | Sysmon | 1 process creation, 5 process end, 6 driver loaded, 7 image loaded, 11 file created | image, command line, parent image, user |
 | PowerShell | 400 engine start, 800 pipeline, 4103 module logging, 4104 ScriptBlock | full script block text, command invocation with parameters |
@@ -191,10 +191,19 @@ The rules only state what a documented source states. The expected-parent and al
 | `GEN-PARENT-GONE` | The creator PID belongs to a process that had already exited: PID reuse the logs do not cover, or a spoofed parent | 55 |
 | `GEN-DUPLICATE-CORE` | A second `lsass`, `services`, `wininit` or `LsaIso` started in the same boot | 75 |
 | `GEN-CRON-SCRATCH` | cron ran a binary from `/tmp`, `/dev/shm`, `/var/tmp` | 75 |
+| `NAM-SYSTEM-PATH` | A binary with the name of a system process (`svchost`, `lsass`, `csrss`, `explorer`, `rundll32`, some 150 more; on Linux `sshd`, `cron`, `bash`, `ps`, `ss`, the daemons and coreutils a rootkit replaces) ran or was written outside the folder it belongs to. `/usr/local` and `/opt` copies score 60 | 60 to 90 |
+| `NAM-FAKE-KERNEL` | A process named like a kernel thread (`[kworker/0:1]`, `kthreadd`, `ksoftirqd`) came from an `execve` or has a path: kernel threads do neither | 95 |
+| `NAM-LOOKALIKE` | A name one look-alike character away from a system binary (`svch0st`, `isass`, `rundl132`), or one edit away (`scvhost`) outside the system folders | 75 to 90 |
+| `NAM-DOUBLE-EXT`, `NAM-RTLO`, `NAM-PADDED` | `invoice.pdf.exe`; a right-to-left override or zero-width character in the name; a run of spaces before the extension | 80 to 95 |
+| `NAM-RANDOM` | A name a generator wrote: hexadecimal, a GUID outside the Installer folders, random case changes or no vowel (`duKhLYUX.exe`), one or two characters, mostly digits. Not inside System32, Program Files or the update and package folders | 50 to 60 |
+| `PATH-WINDOWS-ROOT` | An executable directly in `C:\Windows` that is not one of the few that belong there (PsExec-style droppers) | 70 |
+| `PATH-SCRATCH` | Ran or written in the Recycle Bin, a user-writable Windows folder (Temp, Tasks, Fonts, PerfLogs, `spool\drivers`), `Users\Public`, the root of ProgramData, AppData or the drive, Downloads, Temp; on Linux `/dev/shm`, the web root, a hidden folder, `/tmp`, `/var/tmp`, `/run`, a home directory. The folder sets the score; Temp and Downloads are pointers only | 40 to 85 |
+| `PATH-ARCHIVE-TEMP` | Ran from the temporary extraction of an archive (`Temp\Rar$`, `Temp\7z`, `Temp\Temp1_`): an attachment opened and run in place | 65 |
+| `PATH-ADS`, `PATH-REMOTE` | Ran from an NTFS alternate data stream; from a network share or a WebDAV path | 70 to 90 |
 
-**The process tree behind it.** Before the rules run, CAAREA rebuilds the process tree of every host from the creator PIDs (Security 4688 `ProcessId`, Sysmon `ParentProcessId` and the GUID pair, auditd and `pacct` `ppid`) and the exits (4689, Sysmon 5). A parent is the latest start of that PID before the child; a parent that had exited is reported, not guessed. The tree also completes the timeline where the parser could only give a number: auditd and `pacct` rows show `/usr/bin/sudo (PID: 12493)` instead of `PID: 12493`, and Security 4688 from Windows 7 / 2008 R2 / 2012, which has no `ParentProcessName`, gets the creator's name the same way. A resolved name always keeps its `(PID: n)` so it can be told from one the log wrote. Rows outside a `--toi` window still feed the tree; they just report nothing.
+**The process tree behind it.** Before the rules run, CAAREA rebuilds the process tree of every host from the creator PIDs (Security 4688 `ProcessId`, Sysmon `ParentProcessId` and the GUID pair, auditd and `pacct` `ppid`) and the exits (4689, Sysmon 5). A parent is the latest start of that PID before the child; a parent that had exited is reported, not guessed. A boot closes every PID: Security 4608 and Kernel-General 12 are read as boot markers (and written to the timeline as `evtx:4608` / `evtx:12`), as are the first `smss.exe` and `wininit.exe` of a boot, so a Windows 7 log that spans months without 4689 does not hand a service's PID to whatever held it before the reboot. The tree also completes the timeline where the parser could only give a number: auditd and `pacct` rows show `/usr/bin/sudo (PID: 12493)` instead of `PID: 12493`, and Security 4688 from Windows 7 / 2008 R2 / 2012, which has no `ParentProcessName`, gets the creator's name the same way. A resolved name always keeps its `(PID: n)` so it can be told from one the log wrote. Rows outside a `--toi` window still feed the tree; they just report nothing.
 
-**What the rules need.** Genealogy only fires on sources that name a parent: Security 4688, Sysmon 1, auditd `execve`, `pacct`. Prefetch, BAM, Amcache, UserAssist and SRUM have no parent, so they wait for the naming, path and rarity rules of the next phases. On a Windows host with the default audit policy there is no 4688 at all; with 4688 but without command-line auditing the command line is empty.
+**What the rules need.** Genealogy only fires on sources that name a parent: Security 4688, Sysmon 1, auditd `execve`, `pacct`. The naming and path rules judge any row whose `processname` is an executable (a Windows path or name with a code extension, a Linux absolute path or process record), so they reach Prefetch, Amcache, BAM, ShimCache, UserAssist, AppLocker, the service and task events and the NTFS drops, where the title says *was written to* instead of *ran from*. Task names, service display names, WMI consumers and package names are left alone. On a Windows host with the default audit policy there is no 4688 at all; with 4688 but without command-line auditing the command line is empty. Stock behaviour that lives in scratch folders (Defender's `MPSigStub` and Chrome's updater under `Windows\Temp`, PowerShell's AppLocker probe, KB packages under SoftwareDistribution) is known and silent.
 
 ---
 
@@ -243,7 +252,7 @@ caarea [OPTIONS] --output <PATH>
 
 ## How it is tested
 
-`cargo test` runs 136 tests. They include real-layout records for every binary format, real auditd lines, the public TZif files of two zones, and safety tests that try to break out of the staging folder.
+`cargo test` runs 147 tests. They include real-layout records for every binary format, real auditd lines, the public TZif files of two zones, and safety tests that try to break out of the staging folder.
 
 Beyond the unit tests, the parsers were checked against:
 

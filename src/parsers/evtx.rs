@@ -368,6 +368,10 @@ pub fn classify_event(provider: &str, event_id: u64) -> Option<String> {
     let label = match event_id {
         // Security: process start/stop, service install, scheduled task lifecycle, audit log cleared
         4688 | 4689 | 4697..=4702 if unknown || has("security-auditing") => format!("evtx:{}", event_id),
+        // Boot markers: the audit subsystem starting (Security) and the kernel's own start
+        // (System, Kernel-General). The process tree closes every PID at a boot.
+        4608 if unknown || has("security-auditing") => "evtx:4608".to_string(),
+        12 if has("kernel-general") => "evtx:12".to_string(),
         1102 if unknown || has("eventlog") => "evtx:1102".to_string(),
         // System: services and log clearing
         7045 | 7034 | 7036 if unknown || has("service control manager") => format!("evtx:{}", event_id),
@@ -591,6 +595,21 @@ pub fn extract_event(json_str: &str) -> Option<Event> {
             processname = f.get("ProcessName").cloned().unwrap_or_default();
             pid = f.get("ProcessId").map(|s| parse_pid(s)).unwrap_or(0);
             commandline = Some(format!("Process exited (status {})", f.get("Status").map(|s| s.as_str()).unwrap_or("?")));
+        }
+        "evtx:4608" => {
+            subject_username = "SYSTEM".to_string();
+            processname = "Windows is starting up".to_string();
+            commandline = Some("Boot: the Security audit subsystem started; every PID of the previous boot is gone".to_string());
+            parentprocessname = "System".to_string();
+        }
+        "evtx:12" => {
+            subject_username = "SYSTEM".to_string();
+            processname = "Operating system started".to_string();
+            commandline = Some(match f.get("StartTime") {
+                Some(t) if !t.is_empty() => format!("Boot: kernel started at {} (Kernel-General)", t),
+                _ => "Boot: kernel started (Kernel-General)".to_string(),
+            });
+            parentprocessname = "System".to_string();
         }
         "evtx:4699" | "evtx:4700" | "evtx:4701" | "evtx:4702" => {
             subject_username = domain_user(f.get("SubjectDomainName"), f.get("SubjectUserName"));

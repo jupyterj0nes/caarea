@@ -31,6 +31,30 @@ pub fn host_key(e: &Event) -> String {
     e.computer.to_ascii_lowercase()
 }
 
+/// Seconds a process may precede its boot marker and still belong to that boot.
+pub const BOOT_GRACE_SECONDS: i64 = 120;
+
+/// Rows that mark a boot: Security 4608, Kernel-General 12, and the first `smss.exe`
+/// (the one not created by another `smss.exe`) or `wininit.exe` of a Windows boot.
+pub fn is_boot_marker(e: &Event) -> bool {
+    match artifact_base(&e.artifact) {
+        "evtx:4608" | "evtx:12" => true,
+        "evtx:4688" | "evtx:sysmon:1" => {
+            let name = base_name(&e.processname);
+            name == "wininit.exe" || (name == "smss.exe" && base_name(&e.parentprocessname) != "smss.exe")
+        }
+        _ => false,
+    }
+}
+
+/// The canonical timestamp `secs` seconds earlier; the input itself when it does not parse.
+pub fn minus_seconds(ts: &str, secs: i64) -> String {
+    match chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S%.fZ") {
+        Ok(t) => (t - chrono::Duration::seconds(secs)).format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string(),
+        Err(_) => ts.to_string(),
+    }
+}
+
 /// File name of a process path, lowercased: `C:\Windows\System32\cmd.exe` and
 /// `/usr/bin/bash` become `cmd.exe` and `bash`. A resolved parent (`bash (PID: 12)`) and the
 /// synthetic labels (`svchost.exe (BITS)`) lose their suffix. Empty for `N/A` and `PID: n`.
@@ -63,6 +87,9 @@ pub enum ParentLookup {
 
 #[derive(Debug, Default)]
 pub struct ProcessTree {
+    /// host -> boot instants in time order: 4608, Kernel-General 12, the first `smss.exe`
+    /// and `wininit.exe` of a boot. A PID started before a boot is dead after it.
+    boots: HashMap<String, Vec<String>>,
     /// (host, pid) -> starts in time order
     by_pid: HashMap<(String, u32), Vec<Start>>,
     /// (host, sysmon guid) -> start row
@@ -78,6 +105,9 @@ impl ProcessTree {
     pub fn build(events: &[Event]) -> Self {
         let mut tree = ProcessTree::default();
         for (i, e) in events.iter().enumerate() {
+            if is_boot_marker(e) {
+                tree.boots.entry(host_key(e)).or_default().push(e.timestamp.clone());
+            }
             if is_process_start(&e.artifact) {
                 let host = host_key(e);
                 if e.pid > 0 {
@@ -155,6 +185,16 @@ impl ProcessTree {
         let Some(cand) = starts[..pos].iter().rev().find(|s| s.idx != idx) else {
             return ParentLookup::Unknown;
         };
+        // A boot between the candidate and the child means the PID was handed out again and
+        // the logs did not record the exit (Windows 7 without 4689, a log spanning months).
+        // The first processes of a boot are created seconds before the marker is written,
+        // so a start within two minutes of the marker belongs to the same boot.
+        if let Some(boots) = self.boots.get(&host_key(e)) {
+            let b = boots.partition_point(|b| b.as_str() <= e.timestamp.as_str());
+            if b > 0 && cand.ts < minus_seconds(&boots[b - 1], BOOT_GRACE_SECONDS) {
+                return ParentLookup::Unknown;
+            }
+        }
         match &cand.end {
             Some(end) if end < &e.timestamp => ParentLookup::Exited { parent: cand.idx, exit_ts: end.clone() },
             _ => ParentLookup::Found(cand.idx),
@@ -249,6 +289,40 @@ pub fn resolve_parents(events: &mut [Event]) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_boot_closes_every_pid() {
+        // Windows 7 without 4689: mscorsvw held PID 480 weeks ago, services.exe has it now
+        let boot = |ts: &str| {
+            let mut b = start(ts, "PC", 0, 0, "Windows is starting up", "System");
+            b.artifact = "evtx:4608".to_string();
+            b
+        };
+        let events = vec![
+            start("2026-01-01T00:00:00.000000Z", "PC", 480, 300, r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\mscorsvw.exe", ""),
+            boot("2026-01-05T08:00:00.000000Z"),
+            start("2026-01-05T08:00:30.000000Z", "PC", 900, 480, r"C:\Windows\System32\svchost.exe", ""),
+        ];
+        let tree = ProcessTree::build(&events);
+        assert_eq!(tree.parent(2), ParentLookup::Unknown);
+        let mut resolved = events.clone();
+        assert_eq!(resolve_parents(&mut resolved), 0);
+        assert_eq!(resolved[2].parentprocessname, "");
+
+        // the first processes of a boot precede the marker by seconds: still this boot
+        let events = vec![
+            start("2026-01-01T00:00:00.000000Z", "PC", 480, 300, r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\mscorsvw.exe", ""),
+            start("2026-01-05T07:59:30.000000Z", "PC", 480, 400, r"C:\Windows\System32\services.exe", ""),
+            boot("2026-01-05T08:00:00.000000Z"),
+            start("2026-01-05T08:00:30.000000Z", "PC", 900, 480, r"C:\Windows\System32\svchost.exe", ""),
+        ];
+        let tree = ProcessTree::build(&events);
+        assert_eq!(tree.parent(3), ParentLookup::Found(1));
+        assert_eq!(minus_seconds("2026-01-05T08:00:00.000000Z", 120), "2026-01-05T07:58:00.000000Z");
+        assert!(is_boot_marker(&start("2026-01-05T07:59:00.000000Z", "PC", 4, 0, r"C:\Windows\System32\smss.exe", "")));
+        assert!(!is_boot_marker(&start("2026-01-05T07:59:01.000000Z", "PC", 300, 4, r"C:\Windows\System32\smss.exe", r"C:\Windows\System32\smss.exe")));
+        assert!(is_boot_marker(&start("2026-01-05T07:59:02.000000Z", "PC", 420, 300, r"C:\Windows\System32\wininit.exe", r"C:\Windows\System32\smss.exe")));
+    }
     use crate::parsers::evtx::ProcMeta;
 
     fn start(ts: &str, host: &str, pid: u32, ppid: u32, name: &str, parent: &str) -> Event {

@@ -8,6 +8,8 @@
 //! rule hit, with the lineage of the process and the rows it was correlated with.
 
 pub mod genealogy;
+pub mod names;
+pub mod naming;
 pub mod tree;
 
 use crate::parsers::evtx::Event;
@@ -146,6 +148,7 @@ impl Finding {
 pub fn run(events: &[Event], start: Option<&str>, end: Option<&str>) -> Vec<Finding> {
     let tree = tree::ProcessTree::build(events);
     let mut findings = genealogy::run(events, &tree);
+    findings.extend(naming::run(events, &tree));
     findings.retain(|f| start.map(|s| f.timestamp.as_str() >= s).unwrap_or(true) && end.map(|e| f.timestamp.as_str() <= e).unwrap_or(true));
     findings.sort_by(|a, b| b.score.cmp(&a.score).then(a.timestamp.cmp(&b.timestamp)).then(a.rule_id.cmp(b.rule_id)));
     findings

@@ -36,7 +36,8 @@ const EXPECTED_PARENTS: &[(&str, &[&str])] = &[
     ("wsmprovhost.exe", &["svchost.exe"]),
     ("winrshost.exe", &["svchost.exe"]),
     ("fontdrvhost.exe", &["wininit.exe", "winlogon.exe", "dwm.exe"]),
-    ("dwm.exe", &["wininit.exe", "winlogon.exe", "dwm.exe"]),
+    // Windows 7 starts dwm from the UxSms service (svchost); Windows 8 and later from winlogon
+    ("dwm.exe", &["wininit.exe", "winlogon.exe", "dwm.exe", "svchost.exe"]),
     ("consent.exe", &["svchost.exe", "workplace container helper.exe"]),
     ("runtimebroker.exe", &["svchost.exe", "workplace container helper.exe"]),
     ("tiworker.exe", &["svchost.exe", "workplace container helper.exe"]),
@@ -68,7 +69,7 @@ const ALLOWED_CHILDREN: &[(&str, &[&str])] = &[
     ("lsass.exe", &["werfault.exe"]),
     ("csrss.exe", &["werfault.exe", "wermgr.exe", "werfaultsecure.exe", "conhost.exe", "ngentask.exe", "searchprotocolhost.exe"]),
     ("searchprotocolhost.exe", &["werfault.exe", "wermgr.exe", "werfaultsecure.exe", "conhost.exe", "ngentask.exe", "searchprotocolhost.exe"]),
-    ("taskhost.exe", &["werfault.exe", "wermgr.exe", "werfaultsecure.exe", "conhost.exe", "ngentask.exe", "searchprotocolhost.exe"]),
+    ("taskhost.exe", &["werfault.exe", "wermgr.exe", "werfaultsecure.exe", "conhost.exe", "ngentask.exe", "searchprotocolhost.exe", "winsat.exe"]),
     ("autochk.exe", &["chkdsk.exe", "doskey.exe", "werfault.exe"]),
     ("wermgr.exe", &["werfaultsecure.exe", "werfault.exe", "rundll32.exe"]),
     ("conhost.exe", &["mscorsvw.exe", "wermgr.exe", "werfault.exe", "werfaultsecure.exe"]),
@@ -267,7 +268,10 @@ pub fn run(events: &[Event], tree: &ProcessTree) -> Vec<Finding> {
                         format!("A service host launched {}. The Task Scheduler and some services legitimately do this, so the finding is only a pointer: find the task or service behind it and judge its command line.", child),
                     ));
                 }
-                if parent == "explorer.exe" && is_system_account(&e.subject_username) {
+                // A token anomaly needs a parent the log named: a parent resolved by PID on a
+                // host without exit records (Windows 7 with 4688 only) is where explorer's
+                // recycled PID lands, and the token mismatch is then the symptom of that.
+                if parent == "explorer.exe" && is_system_account(&e.subject_username) && !e.parentprocessname.contains(" (PID: ") {
                     out.push(finding(
                         events, tree, i, "GEN-EXPLORER-SYSTEM", 65, "T1134",
                         format!("{} created under explorer.exe but as {}", child, e.subject_username),
