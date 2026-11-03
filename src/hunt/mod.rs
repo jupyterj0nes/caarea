@@ -76,6 +76,10 @@ pub const MEDIUM_FROM: u8 = 60;
 /// Top of the `hunt_score` scale.
 pub const SCORE_MAX: u8 = 100;
 
+/// A rule measured below this many points fires on more than one clean row in ten: noise
+/// on that kind of row, it gives no state and no points.
+pub const NOISE_BELOW: u8 = 10;
+
 /// The level of a rule, from its catalogue score: the one thing the author's confidence
 /// decides in the tail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -242,11 +246,14 @@ pub fn run(events: &[Event], start: Option<&str>, end: Option<&str>) -> Vec<Find
     findings
 }
 
-/// The tail of every row of a timeline of `rows` rows. The strongest rule of the row gives
-/// `hunt` (high `significant`, medium `candidate`, low nothing), every rule adds its
-/// measured rarity to `hunt_score` (capped at 100), every rule gives a clause of
-/// `hunt_why`, strongest first, and the lineage closes it. Rows without a finding get an
-/// empty tail.
+/// The tail of every row of a timeline of `rows` rows, the convention of the four tools.
+/// A rule measured common (rarity below `NOISE_BELOW` points: it fires on more than one
+/// clean row in ten) is noise: it gives no state and no points, only its clause. Of the
+/// rest, the strongest gives `hunt` (high `significant`, medium `candidate`; low
+/// `candidate` too, since no test judged the row and a score must come with a state),
+/// every rule adds its measured rarity to `hunt_score` (capped at 100), every rule gives
+/// a clause of `hunt_why`, strongest first, and the lineage closes it. Rows without a
+/// finding get an empty tail.
 pub fn tails(rows: usize, findings: &[Finding]) -> Vec<Tail> {
     let mut by_row: BTreeMap<usize, Vec<&Finding>> = BTreeMap::new();
     for f in findings {
@@ -258,8 +265,9 @@ pub fn tails(rows: usize, findings: &[Finding]) -> Vec<Tail> {
             continue;
         }
         fs.sort_by(|a, b| b.level().cmp(&a.level()).then(b.score.cmp(&a.score)).then(a.rule_id.cmp(b.rule_id)));
-        let hunt = fs[0].level().state().unwrap_or("");
-        let score: u32 = fs.iter().map(|f| f.rarity().unwrap_or(0) as u32).sum();
+        let counts = |f: &Finding| f.rarity().is_none_or(|r| r >= NOISE_BELOW);
+        let hunt = fs.iter().find(|f| counts(f)).map(|f| f.level().state().unwrap_or(HUNT_CANDIDATE)).unwrap_or("");
+        let score: u32 = fs.iter().filter(|f| counts(f)).map(|f| f.rarity().unwrap_or(0) as u32).sum();
         let mut why: Vec<String> = fs.iter().map(|f| f.clause()).collect();
         if !fs[0].lineage.is_empty() {
             why.push(format!("lineage: {}", fs[0].lineage));
@@ -466,9 +474,9 @@ mod tests {
         assert_eq!(t[1].hunt, HUNT_CANDIDATE);
         assert!(t[1].hunt_why.starts_with("rule GEN-SERVICES-SHELL (medium): "), "{}", t[1].hunt_why);
 
-        // a low rule alone: no state, but the clause and the rarity are there
+        // a low rule alone: candidate (no test judged the row; a score comes with a state)
         let t = tails(events.len(), std::slice::from_ref(&low));
-        assert_eq!(t[1].hunt, "");
+        assert_eq!(t[1].hunt, HUNT_CANDIDATE);
         assert_eq!(t[1].hunt_score, Some(gone));
         assert!(t[1].hunt_why.starts_with("rule GEN-PARENT-GONE (low): "), "{}", t[1].hunt_why);
         assert!(!t[1].is_empty());
