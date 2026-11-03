@@ -184,15 +184,20 @@ pub fn run(events: &[Event], tree: &ProcessTree) -> Vec<Finding> {
                 }
                 if let Some(allowed) = in_table(&parent, ALLOWED_CHILDREN) {
                     if !in_list(&child, allowed) {
-                        let score = if matches!(parent.as_str(), "lsass.exe" | "winlogon.exe" | "smss.exe" | "wininit.exe" | "csrss.exe") { 90 } else { 70 };
-                        out.push(finding(
-                            events, tree, i, "GEN-RESTRICTED-PARENT", score, "T1055",
+                        // the parents that run with the system's secrets are measured apart
+                        let critical = matches!(parent.as_str(), "lsass.exe" | "winlogon.exe" | "smss.exe" | "wininit.exe" | "csrss.exe");
+                        let mut f = finding(
+                            events, tree, i, "GEN-RESTRICTED-PARENT", if critical { 90 } else { 70 }, "T1055",
                             format!("{} created {}", parent, child),
                             format!(
                                 "{} never creates {}; its only children are {}. Code running inside {} (injection, an image hijack of an accessibility tool, a debugger set in IFEO) launches processes this way.",
                                 parent, child, allowed.join(", "), parent
                             ),
-                        ));
+                        );
+                        if critical {
+                            f.variant = "critical";
+                        }
+                        out.push(f);
                     }
                 }
                 if in_list(&parent, OFFICE_AND_READERS) && in_list(&child, SHELLS_AND_LOLBINS) {
@@ -371,6 +376,7 @@ fn finding_related(events: &[Event], tree: &ProcessTree, i: usize, rule: &'stati
         timestamp: e.timestamp.clone(),
         computer: e.computer.clone(),
         rule_id: rule,
+        variant: "",
         score,
         mitre,
         title,

@@ -71,14 +71,15 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
         return;
     }
     let in_vendor_folder = matches!(fam, DirFamily::System32 | DirFamily::SysWow64 | DirFamily::ProgramFiles) || dir.contains("\\winsxs\\");
-    let mut push = |rule: &'static str, score: u8, mitre: &'static str, title: String, explanation: String| {
-        out.push(mk(events, tree, i, rule, score, mitre, title, explanation));
+    let mut push = |rule: &'static str, variant: &'static str, score: u8, mitre: &'static str, title: String, explanation: String| {
+        out.push(mk(events, tree, i, rule, variant, score, mitre, title, explanation));
     };
 
     // the name as written
     if names::has_bidi_or_zero_width(&raw) {
         push(
             "NAM-RTLO",
+            "",
             95,
             T_RTLO,
             format!("{} carries a right-to-left override or a zero-width character", raw.escape_default()),
@@ -88,6 +89,7 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
     if names::has_padding(&raw) {
         push(
             "NAM-PADDED",
+            "",
             80,
             T_MASQ,
             format!("{} pads its name with spaces before the extension", raw.trim()),
@@ -97,6 +99,7 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
     if let Some(stream) = names::ads_stream(&expanded) {
         push(
             "PATH-ADS",
+            "",
             90,
             T_ADS,
             format!("{} {} an alternate data stream ({})", raw, verb(e), stream),
@@ -106,6 +109,7 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
     if let Some((inner, last)) = names::double_extension(&name) {
         push(
             "NAM-DOUBLE-EXT",
+            "",
             85,
             T_DOUBLE_EXT,
             format!("{} looks like a {} file but is {}", raw, inner, last),
@@ -116,13 +120,13 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
     // the name against the system's: a homoglyph anywhere, one edit away only outside the
     // system and vendor folders (where `net1`, `gpasswd`-style real neighbours live)
     if let Some((sys, how)) = names::lookalike_of(Os::Windows, &name) {
-        let (score, explanation) = if how == "homoglyph" {
-            (90, format!("The name reads as {} but is spelled with look-alike characters. The real {} never runs under another spelling.", sys, sys))
+        let (variant, score, explanation) = if how == "homoglyph" {
+            ("homoglyph", 90, format!("The name reads as {} but is spelled with look-alike characters. The real {} never runs under another spelling.", sys, sys))
         } else {
-            (75, format!("The name is one edit away from {}. Transposed or dropped letters are how a copy is made to pass at a glance.", sys))
+            ("edit", 75, format!("The name is one edit away from {}. Transposed or dropped letters are how a copy is made to pass at a glance.", sys))
         };
         if how == "homoglyph" || !in_vendor_folder {
-            push("NAM-LOOKALIKE", score, T_MASQ_NAME_LOC, format!("{} imitates {} ({})", raw, sys, how), explanation);
+            push("NAM-LOOKALIKE", variant, score, T_MASQ_NAME_LOC, format!("{} imitates {} ({})", raw, sys, how), explanation);
         }
     }
     if !dir.is_empty() {
@@ -130,6 +134,7 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
             let expected = if names::WINDOWS_SYSTEM_BINARIES_ELSEWHERE.iter().any(|(n, _)| *n == name) { "its own folder" } else { "System32" };
             push(
                 "NAM-SYSTEM-PATH",
+                "",
                 90,
                 T_MASQ_NAME_LOC,
                 format!("{} {} {}, not {}", raw, verb(e), fam.label(), expected),
@@ -147,32 +152,34 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
         if fam == DirFamily::WindowsDir && dir == "c:\\windows" && !names::WINDOWS_ROOT_BINARIES.contains(&name.as_str()) {
             push(
                 "PATH-WINDOWS-ROOT",
+                "",
                 70,
                 T_MASQ_NAME_LOC,
                 format!("{} {} the root of C:\\Windows", raw, verb(e)),
                 "Only a handful of executables belong directly in C:\\Windows (explorer, notepad, regedit, hh, write, splwow64). PsExec-style tools and droppers put theirs there because the folder looks trustworthy.".to_string(),
             );
         }
-        let scratch: Option<(u8, &str)> = match fam {
-            DirFamily::Recycle => Some((85, "the Recycle Bin holds deleted files, not programs; running from it hides the file from the user who emptied it")),
-            DirFamily::WindowsWritable => Some((80, "a folder under C:\\Windows that ordinary users can write to (Temp, Tasks, Debug, Tracing, Fonts, PerfLogs, spool\\drivers): the classic place to stage a binary that looks like it belongs to the system")),
-            DirFamily::Public => Some((70, "Users\\Public is writable by everyone and readable by everyone, so it is where tooling is dropped for every account on the host")),
-            DirFamily::ProgramData if dir == "c:\\programdata" => Some((65, "an executable directly in ProgramData, not in a vendor's subfolder, was put there by hand or by a dropper")),
-            DirFamily::DriveRoot => Some((60, "an executable in the root of the drive was put there by hand or by a dropper; installers do not do that")),
-            DirFamily::UserAppData if dir.ends_with("\\appdata\\roaming") => Some((60, "an executable directly in AppData\\Roaming, not in a vendor's subfolder, is the default drop location of commodity malware")),
-            DirFamily::UserProfile if dir.matches('\\').count() == 2 => Some((55, "an executable directly in the user's profile folder was put there by hand or by a dropper")),
-            DirFamily::UserLocalAppData if dir.ends_with("\\appdata\\local") => Some((50, "an executable directly in AppData\\Local, not in a vendor's subfolder, was put there by hand or by a dropper")),
-            DirFamily::UserProfile if dir.contains("\\downloads") || dir.contains("\\desktop") => Some((45, "a program run from Downloads or the Desktop is what the user fetched or received; worth a look when the rest of the row is odd")),
-            DirFamily::Temp => Some((40, "installers and updaters run from Temp all day, so on its own this is a pointer; it matters when the name or the command line is odd too")),
+        let scratch: Option<(&'static str, u8, &'static str)> = match fam {
+            DirFamily::Recycle => Some(("recycle", 85, "the Recycle Bin holds deleted files, not programs; running from it hides the file from the user who emptied it")),
+            DirFamily::WindowsWritable => Some(("windows-writable", 80, "a folder under C:\\Windows that ordinary users can write to (Temp, Tasks, Debug, Tracing, Fonts, PerfLogs, spool\\drivers): the classic place to stage a binary that looks like it belongs to the system")),
+            DirFamily::Public => Some(("public", 70, "Users\\Public is writable by everyone and readable by everyone, so it is where tooling is dropped for every account on the host")),
+            DirFamily::ProgramData if dir == "c:\\programdata" => Some(("programdata", 65, "an executable directly in ProgramData, not in a vendor's subfolder, was put there by hand or by a dropper")),
+            DirFamily::DriveRoot => Some(("drive-root", 60, "an executable in the root of the drive was put there by hand or by a dropper; installers do not do that")),
+            DirFamily::UserAppData if dir.ends_with("\\appdata\\roaming") => Some(("roaming", 60, "an executable directly in AppData\\Roaming, not in a vendor's subfolder, is the default drop location of commodity malware")),
+            DirFamily::UserProfile if dir.matches('\\').count() == 2 => Some(("profile", 55, "an executable directly in the user's profile folder was put there by hand or by a dropper")),
+            DirFamily::UserLocalAppData if dir.ends_with("\\appdata\\local") => Some(("local-appdata", 50, "an executable directly in AppData\\Local, not in a vendor's subfolder, was put there by hand or by a dropper")),
+            DirFamily::UserProfile if dir.contains("\\downloads") || dir.contains("\\desktop") => Some(("downloads-desktop", 45, "a program run from Downloads or the Desktop is what the user fetched or received; worth a look when the rest of the row is odd")),
+            DirFamily::Temp => Some(("temp", 40, "installers and updaters run from Temp all day, so on its own this is a pointer; it matters when the name or the command line is odd too")),
             _ => None,
         };
-        if let Some((score, why)) = scratch {
-            push("PATH-SCRATCH", score, T_MASQ, format!("{} {} {}", raw, verb(e), fam.label()), format!("{}: {}.", shown_dir, why));
+        if let Some((variant, score, why)) = scratch {
+            push("PATH-SCRATCH", variant, score, T_MASQ, format!("{} {} {}", raw, verb(e), fam.label()), format!("{}: {}.", shown_dir, why));
         }
         const ARCHIVE_TEMP: &[&str] = &["\\temp\\rar$", "\\temp\\7z", "\\temp\\temp1_", "\\temp\\wz", "\\temp\\winzip", "\\temp\\bnz."];
         if ARCHIVE_TEMP.iter().any(|a| dir.contains(a)) {
             push(
                 "PATH-ARCHIVE-TEMP",
+                "",
                 65,
                 T_USER_EXEC,
                 format!("{} {} the temporary extraction of an archive", raw, verb(e)),
@@ -183,6 +190,7 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
             let webdav = dir.contains("davwwwroot") || dir.contains("@ssl") || dir.contains("@80");
             push(
                 "PATH-REMOTE",
+                if webdav { "webdav" } else { "share" },
                 if webdav { 80 } else { 70 },
                 T_INGRESS,
                 format!("{} {} {}", raw, verb(e), if webdav { "a WebDAV share" } else { "a network share" }),
@@ -201,24 +209,24 @@ fn windows_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<F
         let stem = names::stem_of(&name);
         let guid = stem.len() == 38 && stem.starts_with('{') && stem.ends_with('}') || stem.len() == 36 && stem.matches('-').count() == 4;
         let class = names::classify_name(&raw);
-        let hit: Option<(u8, String)> = if guid {
-            Some((60, "a GUID for a name outside the Installer and update folders: generated, not chosen".to_string()))
+        let hit: Option<(&'static str, u8, String)> = if guid {
+            Some(("guid", 60, "a GUID for a name outside the Installer and update folders: generated, not chosen".to_string()))
         } else if class == NameClass::HexLike {
-            Some((60, "a hexadecimal name outside the update and package folders: a hash or a generated token, not a program's name".to_string()))
+            Some(("hex", 60, "a hexadecimal name outside the update and package folders: a hash or a generated token, not a program's name".to_string()))
         } else if names::looks_generated(&raw) {
-            Some((55, "letters in a shape no one chooses: random case changes or no vowel at all, the output of a name generator".to_string()))
+            Some(("generated", 55, "letters in a shape no one chooses: random case changes or no vowel at all, the output of a name generator".to_string()))
         } else if class == NameClass::Tiny {
-            Some((55, "a one or two character name is typed in a hurry, by hand".to_string()))
+            Some(("tiny", 55, "a one or two character name is typed in a hurry, by hand".to_string()))
         } else if class == NameClass::DigitHeavy {
-            Some((50, "a name that is mostly digits was generated, not chosen".to_string()))
+            Some(("digits", 50, "a name that is mostly digits was generated, not chosen".to_string()))
         } else if class == NameClass::Odd && !names::has_bidi_or_zero_width(&raw) {
-            Some((45, "non-ASCII or unusual characters in an executable's name; localized installers do it, so this is a pointer".to_string()))
+            Some(("odd", 45, "non-ASCII or unusual characters in an executable's name; localized installers do it, so this is a pointer".to_string()))
         } else {
             None
         };
-        if let Some((score, why)) = hit {
+        if let Some((variant, score, why)) = hit {
             let shape = if guid { "GUID" } else if class == NameClass::Alpha { "random letters" } else { class.label() };
-            push("NAM-RANDOM", score, T_MASQ, format!("{} has a generated-looking name ({})", raw, shape), format!("{}.", why));
+            push("NAM-RANDOM", variant, score, T_MASQ, format!("{} has a generated-looking name ({})", raw, shape), format!("{}.", why));
         }
     }
 }
@@ -243,13 +251,14 @@ fn linux_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<Fin
         return;
     }
     let fam = if dir.is_empty() { DirFamily::Bare } else { names::linux_family(&raw) };
-    let mut push = |rule: &'static str, score: u8, mitre: &'static str, title: String, explanation: String| {
-        out.push(mk(events, tree, i, rule, score, mitre, title, explanation));
+    let mut push = |rule: &'static str, variant: &'static str, score: u8, mitre: &'static str, title: String, explanation: String| {
+        out.push(mk(events, tree, i, rule, variant, score, mitre, title, explanation));
     };
 
     if names::has_bidi_or_zero_width(&name) {
         push(
             "NAM-RTLO",
+            "",
             95,
             T_RTLO,
             format!("{} carries a right-to-left override or a zero-width character", name.escape_default()),
@@ -259,6 +268,7 @@ fn linux_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<Fin
     if names::is_kernel_thread_name(&name) && (e.artifact.starts_with("linux:audit:execve") || raw.starts_with('/')) {
         push(
             "NAM-FAKE-KERNEL",
+            "",
             95,
             T_MASQ_NAME_LOC,
             format!("{} is a userland process named like a kernel thread", name),
@@ -266,68 +276,69 @@ fn linux_rules(events: &[Event], tree: &ProcessTree, i: usize, out: &mut Vec<Fin
         );
     }
     if let Some((sys, how)) = names::lookalike_of(Os::Linux, &name) {
-        let (score, explanation) = if how == "homoglyph" {
-            (90, format!("The name reads as {} but is spelled with look-alike characters.", sys))
+        let (variant, score, explanation) = if how == "homoglyph" {
+            ("homoglyph", 90, format!("The name reads as {} but is spelled with look-alike characters.", sys))
         } else {
-            (75, format!("The name is one edit away from {}.", sys))
+            ("edit", 75, format!("The name is one edit away from {}.", sys))
         };
         // one edit away counts outside the system tree only: `gpasswd` is a real neighbour of `passwd`
         if how == "homoglyph" || (!fam.is_linux_system() && fam != DirFamily::Bare) {
-            push("NAM-LOOKALIKE", score, T_MASQ_NAME_LOC, format!("{} imitates {} ({})", name, sys, how), explanation);
+            push("NAM-LOOKALIKE", variant, score, T_MASQ_NAME_LOC, format!("{} imitates {} ({})", name, sys, how), explanation);
         }
     }
     if !dir.is_empty() && names::LINUX_SYSTEM_BINARIES.contains(&name.as_str()) && !fam.is_linux_system() {
-        let (score, why) = match fam {
-            DirFamily::UsrLocal | DirFamily::Opt => (60, "a locally built copy of a system binary; an admin's build or a trojaned one, the hash and the build date tell which"),
-            _ => (90, "a system binary outside the system tree is a copy or an impostor; a rootkit's ps, a backdoored sshd, a bash with a preload"),
+        let (variant, score, why) = match fam {
+            DirFamily::UsrLocal | DirFamily::Opt => ("local", 60, "a locally built copy of a system binary; an admin's build or a trojaned one, the hash and the build date tell which"),
+            _ => ("", 90, "a system binary outside the system tree is a copy or an impostor; a rootkit's ps, a backdoored sshd, a bash with a preload"),
         };
-        push("NAM-SYSTEM-PATH", score, T_MASQ_NAME_LOC, format!("{} {} {}, not the system tree", name, verb(e), fam.label()), format!("{}: {}.", dir, why));
+        push("NAM-SYSTEM-PATH", variant, score, T_MASQ_NAME_LOC, format!("{} {} {}, not the system tree", name, verb(e), fam.label()), format!("{}: {}.", dir, why));
     }
     if !dir.is_empty() {
-        let scratch: Option<(u8, &str)> = match fam {
-            DirFamily::DevShm => Some((85, "/dev/shm is memory: a binary run from it leaves no trace on disk after a reboot")),
-            DirFamily::Var if raw.starts_with("/var/www/") => Some((85, "the web root holds pages, not programs; a binary there came through the web application")),
-            DirFamily::Hidden => Some((75, "a hidden folder outside the system tree is where tooling is kept out of a directory listing")),
-            DirFamily::Tmp | DirFamily::VarTmp => Some((70, "world-writable scratch space: where a download is run from before it is installed anywhere, if ever")),
-            DirFamily::Run => Some((60, "/run is tmpfs for sockets and pid files, not for programs")),
-            DirFamily::Var => Some((55, "a binary under /var, outside the web root, is unusual: spool, lib and log folders hold data")),
-            DirFamily::RootHome => Some((50, "a program run from root's home was put there by hand")),
-            DirFamily::Mnt => Some((45, "a program run from a mounted volume: removable media or a share")),
-            DirFamily::Home => Some((40, "a program run from a home directory: what the user built or downloaded; a pointer when the rest of the row is odd")),
+        let scratch: Option<(&'static str, u8, &'static str)> = match fam {
+            DirFamily::DevShm => Some(("dev-shm", 85, "/dev/shm is memory: a binary run from it leaves no trace on disk after a reboot")),
+            DirFamily::Var if raw.starts_with("/var/www/") => Some(("web-root", 85, "the web root holds pages, not programs; a binary there came through the web application")),
+            DirFamily::Hidden => Some(("hidden", 75, "a hidden folder outside the system tree is where tooling is kept out of a directory listing")),
+            DirFamily::Tmp | DirFamily::VarTmp => Some(("tmp", 70, "world-writable scratch space: where a download is run from before it is installed anywhere, if ever")),
+            DirFamily::Run => Some(("run", 60, "/run is tmpfs for sockets and pid files, not for programs")),
+            DirFamily::Var => Some(("var", 55, "a binary under /var, outside the web root, is unusual: spool, lib and log folders hold data")),
+            DirFamily::RootHome => Some(("root-home", 50, "a program run from root's home was put there by hand")),
+            DirFamily::Mnt => Some(("mnt", 45, "a program run from a mounted volume: removable media or a share")),
+            DirFamily::Home => Some(("home", 40, "a program run from a home directory: what the user built or downloaded; a pointer when the rest of the row is odd")),
             _ => None,
         };
-        if let Some((score, why)) = scratch {
-            push("PATH-SCRATCH", score, T_MASQ, format!("{} {} {}", name, verb(e), fam.label()), format!("{}: {}.", dir, why));
+        if let Some((variant, score, why)) = scratch {
+            push("PATH-SCRATCH", variant, score, T_MASQ, format!("{} {} {}", name, verb(e), fam.label()), format!("{}: {}.", dir, why));
         }
     }
     if !fam.is_linux_system() && !names::LINUX_SYSTEM_BINARIES.contains(&name.as_str()) {
         let class = names::classify_name(&name);
-        let hit: Option<(u8, String)> = if class == NameClass::HexLike {
-            Some((60, "a hexadecimal name: a hash or a generated token, not a program's name".to_string()))
+        let hit: Option<(&'static str, u8, String)> = if class == NameClass::HexLike {
+            Some(("hex", 60, "a hexadecimal name: a hash or a generated token, not a program's name".to_string()))
         } else if names::looks_generated(&name) {
-            Some((55, "letters in a shape no one chooses: random case changes or no vowel at all".to_string()))
+            Some(("generated", 55, "letters in a shape no one chooses: random case changes or no vowel at all".to_string()))
         } else if class == NameClass::Tiny && !dir.is_empty() {
-            Some((50, "a one or two character name is typed in a hurry, by hand".to_string()))
+            Some(("tiny", 50, "a one or two character name is typed in a hurry, by hand".to_string()))
         } else if class == NameClass::DigitHeavy {
-            Some((50, "a name that is mostly digits was generated, not chosen".to_string()))
+            Some(("digits", 50, "a name that is mostly digits was generated, not chosen".to_string()))
         } else {
             None
         };
-        if let Some((score, why)) = hit {
+        if let Some((variant, score, why)) = hit {
             let shape = if class == NameClass::Alpha { "random letters" } else { class.label() };
-            push("NAM-RANDOM", score, T_MASQ, format!("{} has a generated-looking name ({})", name, shape), format!("{}.", why));
+            push("NAM-RANDOM", variant, score, T_MASQ, format!("{} has a generated-looking name ({})", name, shape), format!("{}.", why));
         }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn mk(events: &[Event], tree: &ProcessTree, i: usize, rule: &'static str, score: u8, mitre: &'static str, title: String, explanation: String) -> Finding {
+fn mk(events: &[Event], tree: &ProcessTree, i: usize, rule: &'static str, variant: &'static str, score: u8, mitre: &'static str, title: String, explanation: String) -> Finding {
     let e = &events[i];
     Finding {
         row: i,
         timestamp: e.timestamp.clone(),
         computer: e.computer.clone(),
         rule_id: rule,
+        variant,
         score,
         mitre,
         title,

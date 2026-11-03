@@ -323,7 +323,7 @@ and caarea depend on it; each tool keeps its own emission and dedup.
 
 ## Phase 11: process hunting (5 days)
 
-Status (2026-11-03): H0, H1, H1b and H2 shipped. `src/hunt/{mod,tree,genealogy}.rs`, `--hunt`,
+Status (2026-11-03): H0, H1, H1b, H2 and the tail convention shipped. `src/hunt/{mod,tree,genealogy}.rs`, `--hunt`,
 `--hunt-output`. `Event` carries `meta: Option<Box<ProcMeta>>` (creator PID, Sysmon GUIDs,
 parent command line, integrity, token elevation, logon id, hashes, original file name),
 never exported. Parent resolution by creator PID runs on every timeline (auditd, pacct,
@@ -341,16 +341,10 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   when Sysmon), exits close the interval, `ancestors`, `lineage`, `resolve_parents`.
 - **H1 (done, 1 d)**: genealogy rules, see README table.
 - **H1b (done, 0.5 d)**: the timeline carries masstin's analysis tail (15 columns; empty
-  tail written bare). `hunt` takes faramir's words (`malicious` ≥ 85, `suspicious` ≥ 60,
-  `review` below; `anomalous` reserved for H4, `baseline` for a reference window),
-  `hunt_score` is the best rule's score, 0 to 100 (from H4, masstin's `-10 log10 q`
-  when a test makes it larger: `hunt::score_of_q`, same table as masstin's `score_of`),
-  `hunt_why` lists every rule of the row, highest score first, then the lineage;
-  `verdict` and `notes` are the analyst's. The
-  findings table opens with `rank, significant, p_value, q_value` and closes with
-  `why_unusual, evidence` like masstin's and allymacb's. faramir's `flag, score, reasons`
-  should move to the same tail with the same words for masstin's claim about the four
-  tools to be true.
+  tail written bare); `verdict` and `notes` are the analyst's. The findings table opens
+  with `rank, significant, p_value, q_value` and closes with `why_unusual, evidence` like
+  masstin's and allymacb's. The first build wrote faramir's words into `hunt` and the
+  rule's catalogue score into `hunt_score`; the tail convention below replaced both.
 - **H2 (done, 1 d)**: naming and path, `src/hunt/{names,naming}.rs`. The directory
   families and name classes are faramir's (`hunt/normalize.rs` there), ported so both tools
   say the same of the same path; the system binary list is SANS *Hunt Evil* plus the
@@ -372,6 +366,28 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   at `review`; DEV-SRV01 adds the planted beacon script in `Users\Public` (70);
   LEO-LNX01 the planted cron job in `/tmp` (70). Not done: a shared crate for the
   classifiers (faramir and caarea each carry a copy).
+- **Tail convention (done, 0.5 d)**: the tail speaks the convention of the four tools
+  (masstin `docs/csv-format.md`, *The same tail in caarea, faramir and allymacb*, commit
+  ad28971). `hunt` admits six words only: `significant`, `candidate`, `habitual`,
+  `not_evaluated`, `baseline`, empty; a high rule (catalogue ≥ 85) gives `significant`, a
+  medium one (≥ 60) `candidate`, a low one leaves the state as it is; a test (H4) gives
+  `significant` when q ≤ alpha and `candidate` above; the stronger state wins
+  (`hunt::state_rank`). `hunt_why` names the source: `rule GEN-OFFICE-SHELL (high): …`,
+  strongest first, `; `-separated, lineage last; a test's clause has no prefix.
+  `hunt_score` is rarity: every rule adds the points measured for its pattern on the stock
+  reference timelines (`src/hunt/rarity.rs`, written by `scripts/measure_rarity.ps1`;
+  `PATH-SCRATCH`, `NAM-RANDOM`, `NAM-LOOKALIKE`, `NAM-SYSTEM-PATH`, `PATH-REMOTE` and
+  `GEN-RESTRICTED-PARENT` are measured per pattern, `Finding::variant`), a test adds
+  `-10 log10 q`, contributions add and cap at 100, an unmeasured rule adds 0 and
+  `hunt_why` says `(rarity not measured)`. The catalogue score stays in the code and in the
+  findings table (`score`, `level`, `rarity`, `pattern` columns). Measured on DEV-SRV01 and
+  LEO-LNX01 (5,936 rows, planted rows left out): no pattern fired on a stock row, so every
+  rule is at 90 for now; the measurement needs a larger stock corpus (a workstation and a
+  server with a week of ordinary use, no lab scripts) before the scores spread. The ten
+  event columns were compared before and after on DEV-SRV01 and DeepBlueCLI: identical;
+  on LEO-LNX01 only the twelve cron and systemd rows whose timestamp is the extraction
+  time of the archive differ (a parser fallback to the file time, to fix on its own). faramir's `flag, score, reasons` still has to move to the same tail with the
+  same words for masstin's claim about the four tools to be true.
 - **H3 (1 d)**: command line. PowerShell encoded / hidden / bypass / download cradles with
   Base64 decoded and rescanned; `certutil`, `bitsadmin`, `mshta`, `regsvr32`, `rundll32`,
   `wmic`, `schtasks`, `sc`, `net user`, `reg add Run`; ransomware preparation (`vssadmin`,
@@ -380,7 +396,8 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   lsass`, `comsvcs MiniDump`, `ntdsutil`, `reg save sam`); Linux cradles (`curl|sh`,
   `base64 -d|sh`, `nc -e`, `/dev/tcp`, `python pty`, `LD_PRELOAD`); length, IP/URL,
   caret and quote obfuscation, `%COMSPEC%`.
-- **H4 (1 d)**: correlation. Drop (`$MFT`/USN create) then execute within N seconds;
+- **H4 (1 d)**: correlation and the statistical tests that own `habitual`, `not_evaluated`
+  and `baseline`, and add `hunt::score_of_q` to the row. Drop (`$MFT`/USN create) then execute within N seconds;
   execute then delete; discovery burst from one parent in 5 minutes; 7045 / 4698 then
   the same path running; log cleared after a flagged row; row that only exists recovered
   (VSS, deleted, carved) raises the score; first execution outside working hours; fleet

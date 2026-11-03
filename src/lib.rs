@@ -305,8 +305,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     if let Some(findings) = findings {
         hunt::export_findings(&findings, &hunt_output)?;
-        let marked = row_tails.iter().filter(|t| !t.hunt.is_empty()).count();
-        log_message(silent, &format!("🔎 Hunt: {} findings saved to: {} ({} timeline rows carry a hunt state)", findings.len(), hunt_output, marked));
+        let judged = row_tails.iter().filter(|t| !t.is_empty()).count();
+        let significant = row_tails.iter().filter(|t| t.hunt == hunt::HUNT_SIGNIFICANT).count();
+        let candidate = row_tails.iter().filter(|t| t.hunt == hunt::HUNT_CANDIDATE).count();
+        log_message(silent, &format!("🔎 Hunt: {} findings saved to: {} ({} timeline rows judged: {} significant, {} candidate)", findings.len(), hunt_output, judged, significant, candidate));
         for (rule, n) in hunt::summary(&findings) {
             log_message(silent, &format!("   {:<28} {}", rule, n));
         }
