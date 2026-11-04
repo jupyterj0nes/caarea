@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### What a clean host executes is vouched for
+
+- **The clean reference is built in.** `src/hunt/clean/windows.tsv` and `linux.tsv` (written by `scripts/measure_clean.py` from the two clean reference hosts, the lab's beacon and the collection's own activity left out: 2,752 and 520 distinct artifact/process/command triples) become host-independent identities at start-up (`src/hunt/clean.rs`: environment variables expanded; user names, SIDs, GUIDs, version folders, random temp names, numbers and hashes neutralised; the per-session Temp subfolder dropped). A row with such an identity is `habitual`, score 0, its rule clauses kept and `on the clean reference hosts` added: the convention of the four tools for an entry something vouches for. On the clean PTR-SRV01 the 26 `candidate` rows (DISM, Defender stubs and cloud-agent scripts in scratch folders, three stock names the shape test took for generated) become `habitual`; nothing is `candidate` or `significant` on either clean host.
+- **Measured on a planted host.** PTR-DC01 (same image, never measured) with eight executions planted and a WMI event consumer firing PowerShell: 5 of 9 found (`significant` for the system name outside its folder and the double extension, `candidate` for the two scratch folders and for each of the 1,740 WMI-launched PowerShell starts), no unplanted row flagged. The misses are rule gaps: an encoded command line launched from `cmd.exe`, a binary under `ProgramData`, `certutil -decode`, `rundll32` on a non-DLL.
+
 ### Rule rarity measured on clean hosts
 
 - **The table in `src/hunt/rarity.rs` is measured on two clean lab hosts collected live** (PTR-SRV01, Windows Server 2016; LEO-LNX01, Ubuntu 22.04; 8,671 rows, nothing planted) instead of the attacked DEV-SRV01 with its plants filtered out. Three patterns fire on stock rows and are worth less than the bound: `PATH-SCRATCH/windows-writable` (18 hits, 27 points: `dismhost.exe`, Defender update stubs and the cloud agent's startup scripts run from `Windows\TEMP`), `PATH-SCRATCH/temp` (4, 33) and `NAM-RANDOM/generated` (4, 33: `SMSvcHost.exe`, `NGenTask.exe`, `BthUdTask.exe`). Every other pattern gets the bound the corpus gives, 39. The reference's limit is recorded with it: the default audit policy leaves the genealogy rules with 61 parentless process rows, so their 39 is a bound, not a measurement.

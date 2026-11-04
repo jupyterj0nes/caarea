@@ -1,0 +1,521 @@
+artifact	processname	commandline
+linux:cloud_init:command	systemctl	cloud-init ran: systemctl reload-or-restart chrony
+linux:cloud_init:command	useradd	cloud-init ran: useradd ubuntu --comment Ubuntu --groups adm,audio,cdrom,dialout,dip,floppy,lxd,netdev,plugdev,sudo,video --shell /bin/bash -m
+linux:cron:scheduled_job	cd	System Cron.d: cd / && run-parts --report /etc/cron.hourly (File: crontab)
+linux:cron:scheduled_job	test	System Cron.d: test -e /run/systemd/system || SERVICE_MODE=1 /sbin/e2scrub_all -A -r (File: e2scrub_all)
+linux:cron:scheduled_job	test	System Cron.d: test -e /run/systemd/system || SERVICE_MODE=1 /usr/lib/x86_64-linux-gnu/e2fsprogs/e2scrub_all_cron (File: e2scrub_all)
+linux:cron:scheduled_job	test	System Cron.d: test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.daily ) (File: crontab)
+linux:cron:scheduled_job	test	System Cron.d: test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.monthly ) (File: crontab)
+linux:cron:scheduled_job	test	System Cron.d: test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.weekly ) (File: crontab)
+linux:journal:cron	cd	   cd / && run-parts --report /etc/cron.hourly
+linux:journal:process	/snap/snapd/28254/usr/lib/snapd/snapd	/snap/snapd/current/usr/lib/snapd/snapd (first message: seclog.go:107: security logger enabled)
+linux:journal:process	/snap/snapd/28254/usr/lib/snapd/snapd-apparmor	/snap/snapd/current/usr/lib/snapd/snapd-apparmor start (first message: main.go:146: Loading profiles [/var/lib/snapd/apparmor/profiles/snap-confine.snapd.28254 /var/lib/snapd/apparmor/profile)
+linux:journal:process	/usr/bin/bash	/bin/bash /sbin/blkdeactivate -u -l wholevg -m disablequeueing -r wait (first message: Deactivating block devices:)
+linux:journal:process	/usr/bin/chfn	/bin/chfn -f "SSSD system user" sssd (first message: changed user 'sssd' information)
+linux:journal:process	/usr/bin/dash	/bin/sh /etc/init.d/apport start (first message:  * Starting automatic crash report generation: apport)
+linux:journal:process	/usr/bin/dash	/bin/sh /etc/init.d/apport stop (first message:  * Stopping automatic crash report generation: apport)
+linux:journal:process	/usr/bin/dash	/bin/sh /lib/apparmor/apparmor.systemd reload (first message: Restarting AppArmor)
+linux:journal:process	/usr/bin/dash	/bin/sh /snap/lxd/40911/commands/daemon.activate (first message: => Starting LXD activation)
+linux:journal:process	/usr/bin/dbus-daemon	@dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only (first message: [system] AppArmor D-Bus mediation is enabled)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 12:51:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 13:12:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 14:04:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 14:25:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 14:56:12: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 15:37:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 16:49:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 17:10:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 17:30:29: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 19:03:14: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 19:23:38: Done)
+linux:journal:process	/usr/bin/gce_workload_cert_refresh	/usr/bin/gce_workload_cert_refresh (first message: 2026/11/03 19:33:42: Done)
+linux:journal:process	/usr/bin/google_guest_agent	/usr/bin/google_guest_agent (first message: GCE Agent Started (version 20250116.00-0ubuntu1~22.04.4))
+linux:journal:process	/usr/bin/google_metadata_script_runner	/usr/bin/google_metadata_script_runner shutdown (first message: Starting shutdown scripts (version 20250116.00-0ubuntu1~22.04.4).)
+linux:journal:process	/usr/bin/google_metadata_script_runner	/usr/bin/google_metadata_script_runner startup (first message: Starting startup scripts (version 20250116.00-0ubuntu1~22.04.4).)
+linux:journal:process	/usr/bin/google_osconfig_agent	/usr/bin/google_osconfig_agent (first message: 2026-11-03T10:40:57.5413Z OSConfigAgent Info: OSConfig Agent (version 20251028.00-0ubuntu2~22.04.1) started.)
+linux:journal:process	/usr/bin/google_osconfig_agent	/usr/bin/google_osconfig_agent (first message: 2026-11-03T12:21:11.3080Z OSConfigAgent Info: OSConfig Agent (version 20251028.00-0ubuntu2~22.04.1) started.)
+linux:journal:process	/usr/bin/google_oslogin_nss_cache	/usr/bin/google_oslogin_nss_cache (first message: Refreshing passwd entry cache)
+linux:journal:process	/usr/bin/google_oslogin_nss_cache	/usr/bin/google_oslogin_nss_cache (first message: oslogin_cache_refresh[1154]: Refreshing passwd entry cache)
+linux:journal:process	/usr/bin/google_oslogin_nss_cache	/usr/bin/google_oslogin_nss_cache (first message: oslogin_cache_refresh[429]: Refreshing passwd entry cache)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin adm (first message: user goadmin added by root to group adm)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin audio (first message: user goadmin added by root to group audio)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin cdrom (first message: user goadmin added by root to group cdrom)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin dialout (first message: user goadmin added by root to group dialout)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin dip (first message: user goadmin added by root to group dip)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin floppy (first message: user goadmin added by root to group floppy)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin google-sudoers (first message: user goadmin added by root to group google-sudoers)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin lxd (first message: user goadmin added by root to group lxd)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin plugdev (first message: user goadmin added by root to group plugdev)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin ubuntu (first message: user goadmin added by root to group ubuntu)
+linux:journal:process	/usr/bin/gpasswd	gpasswd -a goadmin video (first message: user goadmin added by root to group video)
+linux:journal:process	/usr/bin/logger	logger --id=516 -t pollinate "client sent challenge to [https://entropy.ubuntu.com/]" (first message: client sent challenge to [https://entropy.ubuntu.com/])
+linux:journal:process	/usr/bin/nsupdate	/usr/bin/nsupdate -g (first message: tkey query failed: GSSAPI error: Major = Unspecified GSS failure.  Minor code may provide more information, Minor = Serv)
+linux:journal:process	/usr/bin/passwd	passwd -l ubuntu (first message: password for 'ubuntu' changed by 'root')
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3 /usr/bin/networkd-dispatcher --run-startup-triggers (first message: No valid path found for iwconfig)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3 /usr/lib/ubuntu-advantage/daemon.py (first message: ["2026-11-03T10:40:55.021", "INFO", "ubuntupro.daemon", "main", 55, "daemon starting", {}])
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3 /usr/lib/ubuntu-advantage/daemon.py (first message: ["2026-11-03T12:21:08.553", "INFO", "ubuntupro.daemon", "main", 55, "daemon starting", {}])
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3 /usr/lib/ubuntu-advantage/esm_cache.py (first message: ["2026-11-03T12:05:40.811", "INFO", "ubuntupro.system", "get_cpu_info", 296, "could not open /proc/sysinfo", {}])
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.apt Invoked with name=chrony state=present update_cache=True package=['chrony'] update_cache_ret)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.apt Invoked with name=ntpdate state=present update_cache=True package=['ntpdate'] update_cache_r)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.lineinfile Invoked with path=/etc/chrony/chrony.conf regexp=^makestep line=makestep 1 -1 state=p)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.lineinfile Invoked with path=/etc/chrony/chrony.conf regexp=^server 10.10.0.36 line=server 10.10)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.replace Invoked with path=/etc/chrony/chrony.conf regexp=^pool .*$ replace= backup=False encodin)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.setup Invoked with gather_subset=['!all', 'min', 'network'] gather_timeout=10 filter=[] fact_pat)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.systemd Invoked with name=chrony state=restarted daemon_reload=False daemon_reexec=False scope=s)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.builtin.systemd Invoked with name=chrony state=started enabled=True daemon_reload=False daemon_reexec=Fa)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=chronyc -a makestep _uses_shell=False expand_argument_vars=True )
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=echo pbpLW0OrNV6Hxg1mYp | sudo kinit administrator _uses_shell=T)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=echo pbpLW0OrNV6Hxg1mYp | sudo realm join -v -U administrator le)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=ntpdate -u 10.10.0.36 _uses_shell=False expand_argument_vars=Tru)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=realm list _uses_shell=True expand_argument_vars=True stdin_add_)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=realm permit -g FinanceDept@leoncorp.test _uses_shell=True expan)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=realm permit -g Leadership@leoncorp.test _uses_shell=True expand)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=sudo hostnamectl set-hostname LEO-LNX01.leoncorp.test _uses_shel)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=sudo pam-auth-update --enable mkhomedir _uses_shell=True expand_)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=sudo realm join --client-software=sssd leoncorp.test _uses_shell)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.command Invoked with _raw_params=timedatectl set-local-rtc 1 --adjust-system-clock _uses_shell=Fa)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.copy Invoked with dest=/etc/krb5.conf src=/home/goadmin/.ansible/tmp/ansible-tmp-1793707582.59452)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.setup Invoked with gather_subset=['all'] gather_timeout=10 filter=[] fact_path=/etc/ansible/facts)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.stat Invoked with path=/etc/krb5.conf follow=False get_checksum=True get_size=False checksum_algo)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-ansible.legacy.systemd Invoked with name=ssh state=restarted daemon_reload=False daemon_reexec=False scope=syste)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-apt Invoked with name=['krb5-user', 'sssd-krb5'] state=present package=['krb5-user', 'sssd-krb5'] update_cache_r)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-apt Invoked with name=['sssd-ad', 'sssd-tools', 'realmd', 'adcli', 'packagekit'] state=present package=['sssd-ad)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-apt Invoked with name=libpam-krb5 state=present package=['libpam-krb5'] update_cache_retries=5 update_cache_retr)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-apt Invoked with update_cache=True state=present update_cache_retries=5 update_cache_retry_max_delay=12 cache_va)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-file Invoked with src=/run/systemd/resolve/resolv.conf dest=/etc/resolv.conf state=link force=True path=/etc/res)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with dest=/etc/hosts line=10.10.0.36       LEO-DC01.leoncorp.test  leoncorp.test state=presen)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with dest=/etc/hosts line=127.0.1.1       LEO-LNX01.leoncorp.test state=present backup=True p)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with dest=/etc/sudoers line=%Leadership   ALL=(ALL) NOPASSWD:ALL state=present validate=/usr/)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with path=/etc/ssh/sshd_config regexp=^#?GSSAPIAuthentication line=GSSAPIAuthentication yes s)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with path=/etc/ssh/sshd_config regexp=^#?GSSAPICleanupCredentials line=GSSAPICleanupCredentia)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with path=/etc/ssh/sshd_config regexp=^#?GSSAPIStrictAcceptorCheck line=GSSAPIStrictAcceptorC)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with path=/etc/ssh/sshd_config regexp=^#?UsePAM line=UsePAM yes state=present backup=True bac)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with path=/etc/sssd/sssd.conf regexp=^ad_server\s*= state=absent backup=True backrefs=False c)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-lineinfile Invoked with path=/etc/systemd/resolved.conf regexp=^#?DNS= line=DNS=10.10.0.36 state=present backref)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-replace Invoked with path=/etc/sssd/sssd.conf regexp=fallback_homedir = /home/%u@%d replace=fallback_homedir = /)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-replace Invoked with path=/etc/sssd/sssd.conf regexp=use_fully_qualified_names = True replace=use_fully_qualifie)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-systemd Invoked with name=sssd state=restarted daemon_reload=False daemon_reexec=False scope=system no_block=Fal)
+linux:journal:process	/usr/bin/python3.10	/usr/bin/python3.10 (first message: ansible-systemd Invoked with name=systemd-resolved state=restarted daemon_reload=False daemon_reexec=False scope=system )
+linux:journal:process	/usr/bin/run-parts	run-parts -v "--regex=^.*\\.finalrd\$" --arg=setup -- /usr/share/finalrd (first message: run-parts: executing /usr/share/finalrd/mdadm.finalrd setup)
+linux:journal:process	/usr/bin/sbkeysync	/usr/bin/sbkeysync --no-default-keystores --keystore /usr/share/secureboot/updates --verbose (first message: Filesystem keystore:)
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-bvuerjtyiizhvezlppoouisocriokulg ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-crduyqpntcjzggukzzixpoxgqyryyxjl ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-ctswgqjuvukuctkfcrbcwceqwdaqlzsw ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-cumzeiimsukwvggdfswadckzwrslglrj ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-dregentshhbqrfglgjaekjydefsjkjju ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-dyvryoblukfqhxyplpittmmmviqgipxe ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-epywccexzugpeswjadzxctgzmvqjdnca ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-fzcyogcwyzirwgvqgrlzhqauzorhtzhz ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-ggfdzrutlchhqixpgoifpgacyenstfmt ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-gguhccgoznimbncqrcesjcylpfkhyank ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-glelwdurtylmihadvuqgvnazbxqcsyks ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-gxtvwuwqtgsxvxughpzcdnkzzzjkqftd ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-insggjyflplgohplqmzgvfqrhdbiryes ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-jludomgemktxoarmzjsghmglejxfkvbd ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-jqyamhssztspioelceuugudubnkciici ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-kgeatktscqxjadiaclszqidktnuguagl ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-ktgfdnrvhuonehysimqjbrqmbjxcochi ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-luvxhlsrvxtoxcowxvnzthdnpehehaiq ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-lxptpgdmnretjxypgzsansywuovrurwn ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-manjwibvifxdeulgollcfetpzhymptec ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-mnmgoegsstggbjmasgfsguscqgfzpyfk ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-mtndvdibahooxuiatyrbotzhpjnbnruz ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-mwvxfnztvxuooqicrpppzgiienbczihw ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-nqyrsficxxzdhdinuhgjrxosheoquiex ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-omzmwcniruokaaffmreudnvmiozzqcpb ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-orknejcqojozfembuzmhqpxekomhxxwz ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-ozytlxyivkycqmilkiamioppiqhlantw ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-plxxdwtpvdlgzpykesfrboahnbearcwn ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-rwnzqkiqszcdgcebcvsvgpdqofgdfsth ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-szurqslcqfwnhshxeboxuxtyuoyjuyud ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-tdeiegtulknfgvmjuilwptfvtxkzlddi ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-tkwkiuofeppptstiyyfdymdofscmtnja ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-ufyzexnmywlqquvjtymwkhitortcfoqx ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-uhefhipisykiwbmwetjesqgpewwjoecx ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-urnmesbvlbazctanmxbpagxnwrimgsrn ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-wkqlqhvdwbddpyipnzsflpsjkedyjdrt ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-wojudfzwnhshcyiebdrjurpxqznenryv ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-xfyygnsfizbtgujdwicsqiplgeijebzp ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-xgqefiarrqdmuaxcyyiphjifeknaemnb ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-xxvfiyflnqvhorvxyvercdxtrkipujcz ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -H -S -n -u root /bin/sh -c "echo BECOME-SUCCESS-yremiixthuxkhobulmuiljzlwilvzdqm ; /usr/bin/python3.10" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001))
+linux:journal:process	/usr/bin/sudo	sudo -n true (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1002))
+linux:journal:process	/usr/bin/sudo	sudo find / -xdev -print0 (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1002))
+linux:journal:process	/usr/bin/sudo	sudo find / -xdev -printf "%i\\n" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1002))
+linux:journal:process	/usr/bin/sudo	sudo hostnamectl set-hostname LEO-LNX01.leoncorp.test (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=0))
+linux:journal:process	/usr/bin/sudo	sudo kinit administrator (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=0))
+linux:journal:process	/usr/bin/sudo	sudo pam-auth-update --enable mkhomedir (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=0))
+linux:journal:process	/usr/bin/sudo	sudo realm join --client-software=sssd leoncorp.test (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=0))
+linux:journal:process	/usr/bin/sudo	sudo realm join -v -U administrator leoncorp.test (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=0))
+linux:journal:process	/usr/bin/sudo	sudo stat --printf "%n|%W|%Y\\n" /etc/passwd /bin/ls (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1002))
+linux:journal:process	/usr/bin/sudo	sudo tar czf - --ignore-failed-read -C / var/log etc/passwd etc/group etc/crontab etc/cron.d etc/cron.daily etc/cron.hourly etc/cron.weekly etc/cron.monthly etc/hostname etc/timezone etc/os-release var/spool/cron root/.bash_history root/.zsh_history home (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1002))
+linux:journal:process	/usr/bin/sudo	sudo xargs -0 stat --printf "0|%n|%i|%A|%u|%g|%s|%X|%Y|%Z|%W\\n" (first message: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1002))
+linux:journal:process	/usr/bin/systemd-tmpfiles	systemd-tmpfiles --create /usr/lib/finalrd/finalrd-static.conf /run/finalrd-libs.conf (first message: /run/finalrd-libs.conf:48: Duplicate line for path "/run/initramfs/lib64", ignoring.)
+linux:journal:process	/usr/bin/tee	tee -a /var/log/cloud-init-output.log (first message: Cloud-init v. 26.1-0ubuntu1~22.04.1 running 'init' at Tue, 03 Nov 2026 10:40:45 +0000. Up 9.63 seconds.)
+linux:journal:process	/usr/bin/tee	tee -a /var/log/cloud-init-output.log (first message: Cloud-init v. 26.1-0ubuntu1~22.04.1 running 'init' at Tue, 03 Nov 2026 12:20:59 +0000. Up 9.16 seconds.)
+linux:journal:process	/usr/bin/tee	tee -a /var/log/cloud-init-output.log (first message: Cloud-init v. 26.1-0ubuntu1~22.04.1 running 'init-local' at Tue, 03 Nov 2026 10:40:42 +0000. Up 6.76 seconds.)
+linux:journal:process	/usr/bin/tee	tee -a /var/log/cloud-init-output.log (first message: Cloud-init v. 26.1-0ubuntu1~22.04.1 running 'init-local' at Tue, 03 Nov 2026 12:20:57 +0000. Up 6.77 seconds.)
+linux:journal:process	/usr/bin/tee	tee -a /var/log/cloud-init-output.log (first message: Cloud-init v. 26.1-0ubuntu1~22.04.1 running 'modules:config' at Tue, 03 Nov 2026 10:41:05 +0000. Up 29.05 seconds.)
+linux:journal:process	/usr/bin/tee	tee -a /var/log/cloud-init-output.log (first message: Cloud-init v. 26.1-0ubuntu1~22.04.1 running 'modules:config' at Tue, 03 Nov 2026 12:21:13 +0000. Up 22.84 seconds.)
+linux:journal:process	/usr/bin/tee	tee -a /var/log/cloud-init-output.log (first message: Cloud-init v. 26.1-0ubuntu1~22.04.1 running 'modules:final' at Tue, 03 Nov 2026 10:41:06 +0000. Up 30.30 seconds.)
+linux:journal:process	/usr/bin/udevadm	/lib/systemd/systemd-udevd (first message: Using default interface naming scheme 'v249'.)
+linux:journal:process	/usr/lib/systemd/systemd	"(sd-pam)" (first message: pam_unix(systemd-user:session): session closed for user goadmin)
+linux:journal:process	/usr/lib/systemd/systemd	"(systemd)" (first message: pam_unix(systemd-user:session): session opened for user goadmin(uid=1001) by (uid=0))
+linux:journal:process	/usr/lib/systemd/systemd	/lib/systemd/systemd --user (first message: Queued start job for default target Main User Target.)
+linux:journal:process	/usr/lib/systemd/systemd	/sbin/init (first message: Mounted Huge Pages File System.)
+linux:journal:process	/usr/lib/systemd/systemd-hostnamed	/lib/systemd/systemd-hostnamed (first message: Hostname set to <LEO-LNX01.leoncorp.test> (static))
+linux:journal:process	/usr/lib/systemd/systemd-hostnamed	/lib/systemd/systemd-hostnamed (first message: Hostname set to <rf-1a1a0fd2c8e-leo-lnx01> (static))
+linux:journal:process	/usr/lib/systemd/systemd-journald	/lib/systemd/systemd-journald (first message: Journal started)
+linux:journal:process	/usr/lib/systemd/systemd-logind	/lib/systemd/systemd-logind (first message: Watching system buttons on /dev/input/event0 (Power Button))
+linux:journal:process	/usr/lib/systemd/systemd-networkd	/lib/systemd/systemd-networkd (first message: lo: Link UP)
+linux:journal:process	/usr/lib/systemd/systemd-resolved	/lib/systemd/systemd-resolved (first message: Positive Trust Anchors:)
+linux:journal:process	/usr/lib/systemd/systemd-timedated	/lib/systemd/systemd-timedated (first message: RTC configured to local time.)
+linux:journal:process	/usr/libexec/packagekitd	/usr/libexec/packagekitd (first message: daemon start)
+linux:journal:process	/usr/libexec/polkitd	/usr/libexec/polkitd --no-debug (first message: started daemon version 0.105 using authority implementation `local' version `0.105')
+linux:journal:process	/usr/libexec/realmd	/usr/libexec/realmd (first message: Loaded settings from: /usr/lib/realmd/realmd-defaults.conf /usr/lib/realmd/realmd-distro.conf)
+linux:journal:process	/usr/libexec/sssd/sssd_be	/usr/libexec/sssd/sssd_be --domain leoncorp.test --uid 0 --gid 0 --logger=files (first message: Starting up)
+linux:journal:process	/usr/libexec/sssd/sssd_nss	/usr/libexec/sssd/sssd_nss --uid 0 --gid 0 --logger=files (first message: Starting up)
+linux:journal:process	/usr/libexec/sssd/sssd_pam	/usr/libexec/sssd/sssd_pam --uid 0 --gid 0 --logger=files (first message: Starting up)
+linux:journal:process	/usr/sbin/adcli	/usr/sbin/adcli join --verbose --domain leoncorp.test --domain-realm LEONCORP.TEST --domain-controller 10.10.0.36 --login-type user --login-user administrator --stdin-password (first message: GSSAPI client step 1)
+linux:journal:process	/usr/sbin/adcli	/usr/sbin/adcli update --domain=leoncorp.test --host-fqdn=LEO-LNX01.leoncorp.test --computer-password-lifetime=30 --domain-controller=leo-dc01.leoncorp.test (first message: GSSAPI client step 1)
+linux:journal:process	/usr/sbin/apparmor_parser	/sbin/apparmor_parser --write-cache --replace -- /etc/apparmor.d (first message: Warning: found usr.sbin.sssd in /etc/apparmor.d/force-complain, forcing complain mode)
+linux:journal:process	/usr/sbin/chronyd	/usr/sbin/chronyd -F 1 (first message: chronyd version 4.2 starting (+CMDMON +NTP +REFCLOCK +RTC +PRIVDROP +SCFILTER +SIGND +ASYNCDNS +NTS +SECHASH +IPV6 -DEBU)
+linux:journal:process	/usr/sbin/cron	/usr/sbin/CRON -f -P (first message: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0))
+linux:journal:process	/usr/sbin/cron	/usr/sbin/cron -f -P (first message: (CRON) INFO (pidfile fd = 3))
+linux:journal:process	/usr/sbin/dhclient	/usr/sbin/dhclient -1 -v -lf /run/dhclient.lease -pf /run/dhclient.pid -sf /bin/true ens4 (first message: Internet Systems Consortium DHCP Client 4.4.1)
+linux:journal:process	/usr/sbin/dhclient	/usr/sbin/dhclient -1 -v -lf /run/dhclient.lease -pf /run/dhclient.pid -sf /bin/true ens4 (first message: execve (/bin/true, ...): Permission denied)
+linux:journal:process	/usr/sbin/e2fsck	fsck.ext4 -a -C5 /dev/sda1 (first message: cloudimg-rootfs: clean, 76403/516096 files, 619229/1020155 blocks)
+linux:journal:process	/usr/sbin/fsck.fat	fsck.vfat -a /dev/sda15 (first message: fsck.fat 4.2 (2021-01-31))
+linux:journal:process	/usr/sbin/groupadd	/sbin/groupadd -g 121 sssd (first message: group added to /etc/group: name=sssd, GID=121)
+linux:journal:process	/usr/sbin/groupadd	groupadd google-sudoers (first message: group added to /etc/group: name=google-sudoers, GID=1001)
+linux:journal:process	/usr/sbin/multipathd	/sbin/multipathd -d -s (first message: --------start up--------)
+linux:journal:process	/usr/sbin/rsyslogd	/usr/sbin/rsyslogd -n -iNONE (first message: imuxsock: Acquired UNIX socket '/run/systemd/journal/syslog' (fd 3) from systemd.  [v8.2112.0])
+linux:journal:process	/usr/sbin/sshd	"sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups" (first message: Received signal 15; terminating.)
+linux:journal:process	/usr/sbin/sshd	"sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups" (first message: Server listening on 0.0.0.0 port 22.)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 34380 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 34448 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 36726 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 42728 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 43000 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 48348 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 48534 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 49916 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 51488 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 51822 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 53272 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 53938 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 54852 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 56640 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 57024 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin [priv]" (first message: Accepted publickey for goadmin from 10.10.0.50 port 57344 ssh2: ED25519 SHA256:46xieJK3WVtogCyXSzUCjAFgk+XGFbQp/B6D1gV3S)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin@notty" "" (first message: Received disconnect from 10.10.0.50 port 34380:11: disconnected by user)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin@notty" "" (first message: Received disconnect from 10.10.0.50 port 53272:11: disconnected by user)
+linux:journal:process	/usr/sbin/sshd	"sshd: goadmin@notty" "" (first message: Received disconnect from 10.10.0.50 port 57344:11: disconnected by user)
+linux:journal:process	/usr/sbin/sshd	/usr/sbin/sshd -D (first message: Server listening on 0.0.0.0 port 22.)
+linux:journal:process	/usr/sbin/sssd	/usr/sbin/sssd -i --logger=files (first message: Starting up)
+linux:journal:process	/usr/sbin/useradd	/sbin/useradd -d /var/lib/sss -g sssd -s /usr/sbin/nologin -u 113 sssd (first message: new user: name=sssd, UID=113, GID=121, home=/var/lib/sss, shell=/usr/sbin/nologin, from=none)
+linux:journal:process	/usr/sbin/useradd	useradd --system -M -N --home /var/snap/lxd/common/lxd --shell /bin/false --gid lxd lxd (first message: new user: name=lxd, UID=998, GID=119, home=/var/snap/lxd/common/lxd, shell=/bin/false, from=none)
+linux:journal:process	/usr/sbin/useradd	useradd -m -s /bin/bash -p "*" goadmin (first message: new group: name=goadmin, GID=1002)
+linux:journal:process	/usr/sbin/useradd	useradd ubuntu --comment Ubuntu --groups adm audio cdrom dialout dip floppy lxd netdev plugdev sudo video --shell /bin/bash -m (first message: new group: name=ubuntu, GID=1000)
+linux:journal:process	/usr/sbin/usermod	/sbin/usermod -p "*" sssd (first message: change user 'sssd' password)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-bvuerjtyiizhvezlppoouisocriokulg (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-crduyqpntcjzggukzzixpoxgqyryyxjl (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ctswgqjuvukuctkfcrbcwceqwdaqlzsw (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-cumzeiimsukwvggdfswadckzwrslglrj (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-dregentshhbqrfglgjaekjydefsjkjju (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-dyvryoblukfqhxyplpittmmmviqgipxe (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-epywccexzugpeswjadzxctgzmvqjdnca (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-fzcyogcwyzirwgvqgrlzhqauzorhtzhz (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ggfdzrutlchhqixpgoifpgacyenstfmt (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-gguhccgoznimbncqrcesjcylpfkhyank (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-glelwdurtylmihadvuqgvnazbxqcsyks (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-gxtvwuwqtgsxvxughpzcdnkzzzjkqftd (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-insggjyflplgohplqmzgvfqrhdbiryes (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-jludomgemktxoarmzjsghmglejxfkvbd (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-jqyamhssztspioelceuugudubnkciici (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-kgeatktscqxjadiaclszqidktnuguagl (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ktgfdnrvhuonehysimqjbrqmbjxcochi (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-luvxhlsrvxtoxcowxvnzthdnpehehaiq (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-lxptpgdmnretjxypgzsansywuovrurwn (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-manjwibvifxdeulgollcfetpzhymptec (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-mnmgoegsstggbjmasgfsguscqgfzpyfk (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-mtndvdibahooxuiatyrbotzhpjnbnruz (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-mwvxfnztvxuooqicrpppzgiienbczihw (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-nqyrsficxxzdhdinuhgjrxosheoquiex (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-omzmwcniruokaaffmreudnvmiozzqcpb (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-orknejcqojozfembuzmhqpxekomhxxwz (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ozytlxyivkycqmilkiamioppiqhlantw (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-plxxdwtpvdlgzpykesfrboahnbearcwn (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-rwnzqkiqszcdgcebcvsvgpdqofgdfsth (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-szurqslcqfwnhshxeboxuxtyuoyjuyud (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-tdeiegtulknfgvmjuilwptfvtxkzlddi (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-tkwkiuofeppptstiyyfdymdofscmtnja (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ufyzexnmywlqquvjtymwkhitortcfoqx (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-uhefhipisykiwbmwetjesqgpewwjoecx (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-urnmesbvlbazctanmxbpagxnwrimgsrn (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-wkqlqhvdwbddpyipnzsflpsjkedyjdrt (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-wojudfzwnhshcyiebdrjurpxqznenryv (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-xfyygnsfizbtgujdwicsqiplgeijebzp (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-xgqefiarrqdmuaxcyyiphjifeknaemnb (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-xxvfiyflnqvhorvxyvercdxtrkipujcz (CWD: /home/goadmin)
+linux:journal:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-yremiixthuxkhobulmuiljzlwilvzdqm (CWD: /home/goadmin)
+linux:journal:sudo	/usr/bin/hostnamectl	/usr/bin/hostnamectl set-hostname LEO-LNX01.leoncorp.test (CWD: /home/goadmin)
+linux:journal:sudo	/usr/bin/kinit	/usr/bin/kinit administrator (CWD: /home/goadmin)
+linux:journal:sudo	/usr/sbin/pam-auth-update	/usr/sbin/pam-auth-update --enable mkhomedir (CWD: /home/goadmin)
+linux:journal:sudo	/usr/sbin/realm	/usr/sbin/realm join --client-software=sssd leoncorp.test (CWD: /home/goadmin)
+linux:journal:sudo	/usr/sbin/realm	/usr/sbin/realm join -v -U administrator leoncorp.test (CWD: /home/goadmin)
+linux:journal:systemd_started	Authorization Manager.	Started Authorization Manager.
+linux:journal:systemd_started	Check to see whether there is a new version of Ubuntu available.	Started Check to see whether there is a new version of Ubuntu available.
+linux:journal:systemd_started	D-Bus System Message Bus.	Started D-Bus System Message Bus.
+linux:journal:systemd_started	Daily Cleanup of Temporary Directories.	Started Daily Cleanup of Temporary Directories.
+linux:journal:systemd_started	Daily apt download activities.	Started Daily apt download activities.
+linux:journal:systemd_started	Daily apt upgrade and clean activities.	Started Daily apt upgrade and clean activities.
+linux:journal:systemd_started	Daily dpkg database backup timer.	Started Daily dpkg database backup timer.
+linux:journal:systemd_started	Daily man-db regeneration.	Started Daily man-db regeneration.
+linux:journal:systemd_started	Daily rotation of log files.	Started Daily rotation of log files.
+linux:journal:systemd_started	Device-Mapper Multipath Device Controller.	Started Device-Mapper Multipath Device Controller.
+linux:journal:systemd_started	Discard unused blocks once a week.	Started Discard unused blocks once a week.
+linux:journal:systemd_started	Dispatch Password Requests to Console Directory Watch.	Started Dispatch Password Requests to Console Directory Watch.
+linux:journal:systemd_started	Dispatcher daemon for systemd-networkd.	Started Dispatcher daemon for systemd-networkd.
+linux:journal:systemd_started	Download data for packages that failed at package install time.	Started Download data for packages that failed at package install time.
+linux:journal:systemd_started	File System Check Daemon to report status.	Started File System Check Daemon to report status.
+linux:journal:systemd_started	Forward Password Requests to Wall Directory Watch.	Started Forward Password Requests to Wall Directory Watch.
+linux:journal:systemd_started	GCE Workload Certificate refresh timer.	Started GCE Workload Certificate refresh timer.
+linux:journal:systemd_started	Getty on tty1.	Started Getty on tty1.
+linux:journal:systemd_started	Google Compute Engine Guest Agent.	Started Google Compute Engine Guest Agent.
+linux:journal:systemd_started	Google OSConfig Agent.	Started Google OSConfig Agent.
+linux:journal:systemd_started	Hostname Service.	Started Hostname Service.
+linux:journal:systemd_started	Journal Service.	Started Journal Service.
+linux:journal:systemd_started	LSB: automatic crash report generation.	Started LSB: automatic crash report generation.
+linux:journal:systemd_started	Message of the Day.	Started Message of the Day.
+linux:journal:systemd_started	NSS cache refresh timer.	Started NSS cache refresh timer.
+linux:journal:systemd_started	Network Configuration.	Started Network Configuration.
+linux:journal:systemd_started	Network Name Resolution.	Started Network Name Resolution.
+linux:journal:systemd_started	OpenBSD Secure Shell server.	Started OpenBSD Secure Shell server.
+linux:journal:systemd_started	PackageKit Daemon.	Started PackageKit Daemon.
+linux:journal:systemd_started	Periodic ext4 Online Metadata Check for All Filesystems.	Started Periodic ext4 Online Metadata Check for All Filesystems.
+linux:journal:systemd_started	Realm and Domain Configuration.	Started Realm and Domain Configuration.
+linux:journal:systemd_started	Regular background program processing daemon.	Started Regular background program processing daemon.
+linux:journal:systemd_started	Rule-based Manager for Device Events and Files.	Started Rule-based Manager for Device Events and Files.
+linux:journal:systemd_started	Save initial kernel messages after boot.	Started Save initial kernel messages after boot.
+linux:journal:systemd_started	Serial Getty on ttyS0.	Started Serial Getty on ttyS0.
+linux:journal:systemd_started	Session 1 of User goadmin.	Started Session 1 of User goadmin.
+linux:journal:systemd_started	Session 11 of User goadmin.	Started Session 11 of User goadmin.
+linux:journal:systemd_started	Session 13 of User goadmin.	Started Session 13 of User goadmin.
+linux:journal:systemd_started	Session 16 of User goadmin.	Started Session 16 of User goadmin.
+linux:journal:systemd_started	Session 18 of User goadmin.	Started Session 18 of User goadmin.
+linux:journal:systemd_started	Session 20 of User goadmin.	Started Session 20 of User goadmin.
+linux:journal:systemd_started	Session 22 of User goadmin.	Started Session 22 of User goadmin.
+linux:journal:systemd_started	Session 24 of User goadmin.	Started Session 24 of User goadmin.
+linux:journal:systemd_started	Session 26 of User goadmin.	Started Session 26 of User goadmin.
+linux:journal:systemd_started	Session 28 of User goadmin.	Started Session 28 of User goadmin.
+linux:journal:systemd_started	Session 3 of User goadmin.	Started Session 3 of User goadmin.
+linux:journal:systemd_started	Session 30 of User goadmin.	Started Session 30 of User goadmin.
+linux:journal:systemd_started	Session 32 of User goadmin.	Started Session 32 of User goadmin.
+linux:journal:systemd_started	Session 5 of User goadmin.	Started Session 5 of User goadmin.
+linux:journal:systemd_started	Session 7 of User goadmin.	Started Session 7 of User goadmin.
+linux:journal:systemd_started	Session 9 of User goadmin.	Started Session 9 of User goadmin.
+linux:journal:systemd_started	Snap Daemon.	Started Snap Daemon.
+linux:journal:systemd_started	System Logging Service.	Started System Logging Service.
+linux:journal:systemd_started	System Security Services Daemon.	Started System Security Services Daemon.
+linux:journal:systemd_started	Time & Date Service.	Started Time & Date Service.
+linux:journal:systemd_started	Ubuntu Pro Background Auto Attach.	Started Ubuntu Pro Background Auto Attach.
+linux:journal:systemd_started	Unattended Upgrades Shutdown.	Started Unattended Upgrades Shutdown.
+linux:journal:systemd_started	User Login Management.	Started User Login Management.
+linux:journal:systemd_started	User Manager for UID 1001.	Started User Manager for UID 1001.
+linux:journal:systemd_started	User Manager for UID 1002.	Started User Manager for UID 1002.
+linux:journal:systemd_started	chrony, an NTP client/server.	Started chrony, an NTP client/server.
+linux:journal:systemd_started	snap.lxd.hook.configure-88e5d3d8-cad1-465f-b699-14853b4ae072.scope.	Started snap.lxd.hook.configure-88e5d3d8-cad1-465f-b699-14853b4ae072.scope.
+linux:journal:systemd_started	snap.lxd.hook.install-16e62d41-ffb5-4863-a59d-dcf8f8b44254.scope.	Started snap.lxd.hook.install-16e62d41-ffb5-4863-a59d-dcf8f8b44254.scope.
+linux:package:apt	/usr/bin/apt-get	/usr/bin/apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install krb5-user=1.19.2-2ubuntu0.10 | Install 6: krb5-user, libkadm5srv-mit12, krb5-config, libkdb5-10, libgssrpc4, libkadm5clnt-mit12
+linux:package:apt	/usr/bin/apt-get	/usr/bin/apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install libpam-krb5=4.11-1build1 | Install 1: libpam-krb5
+linux:package:apt	/usr/bin/apt-get	/usr/bin/apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install ntpdate=1:4.2.8p15+dfsg-1ubuntu2 | Install 1: ntpdate
+linux:package:apt	/usr/bin/apt-get	/usr/bin/apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install sssd-ad=2.6.3-1ubuntu3.9 sssd-tools=2.6.3-1ubuntu3.9 realmd=0.17.0-1ubuntu2 adcli=0.9.1-1ubuntu2 | Install 50: libcups2, libsasl2-modules-gssapi-mit, libdhash1, libini-config5, libcollection4, libldb2, libtevent0, libpwquality-common
+linux:package:apt	apt-get	apt-get --assume-yes autoremove --purge | Purge 1: libnuma1
+linux:package:apt	apt-get	apt-get --reinstall install pollinate | Reinstall 1: pollinate
+linux:package:apt	apt-get	apt-get -y autoremove --purge fwupd modemmanager udisks2 | Purge 8: libonig5, modemmanager, libfwupd3, udisks2, libprotobuf-c1, jq, libjq1, fwupd
+linux:package:apt	apt-get	apt-get -y install chrony google-compute-engine google-compute-engine-oslogin google-guest-agent google-osconfig-agent | Install 9: libonig5, chrony, google-guest-agent, google-osconfig-agent, nvme-cli, google-compute-engine, jq, google-compute-engine-oslogin | Remove 1: systemd-timesyncd
+linux:package:apt	apt-get	apt-get -y purge fwupd fwupd-signed bolt libarchive13 libfwupd2 libgcab-1.0-0 libgpgme11 libgudev-1.0-0 libgusb2 libjson-glib-1.0-0 libjson-glib-1.0-common libsmbios-c2 tpm-udev | Purge 23: libtss2-tcti-cmd0, libgusb2, libtss2-tcti-device0, libarchive13, libgcab-1.0-0, libfwupd2, libtss2-tcti-swtpm0, libsmbios-c2
+linux:package:apt	apt-get	apt-get -y purge irqbalance | Purge 1: irqbalance
+linux:package:apt	apt-get	apt-get install --assume-yes linux-gcp | Install 13: linux-image-6.8.0-1070-gcp, linux-tools-common, linux-image-gcp, linux-tools-6.8.0-1070-gcp, linux-headers-gcp, linux-gcp-6.8-tools-6.8.0-1070, linux-modules-6.8.0-1070-gcp, libnuma1
+linux:package:apt	apt-get	apt-get install -qqy grub-pc shim-signed | Install 5: mokutil, grub-efi-amd64-signed, grub-efi-amd64-bin, efibootmgr, shim-signed
+linux:package:apt	apt-get	apt-get purge --assume-yes ?config-files | Purge 1: systemd-timesyncd
+linux:package:apt	apt-get	apt-get remove --purge --assume-yes ^linux-.* linux-base+ | Purge 8: linux-virtual, linux-headers-generic, linux-headers-5.15.0-198, linux-headers-5.15.0-198-generic, linux-image-virtual, linux-image-5.15.0-198-generic, linux-headers-virtual, linux-modules-5.15.0-198-generic
+linux:package:dpkg	adcli:amd64	Debian Package Installed: adcli:amd64 (0.9.1-1ubuntu2)
+linux:package:dpkg	bolt:amd64	Debian Package Installed: bolt:amd64 (0.9.2-1)
+linux:package:dpkg	chrony:amd64	Debian Package Installed: chrony:amd64 (4.2-2ubuntu2.1)
+linux:package:dpkg	cracklib-runtime:amd64	Debian Package Installed: cracklib-runtime:amd64 (2.9.6-3.4build4)
+linux:package:dpkg	dbus:amd64	Debian Package Installed: dbus:amd64 (1.12.20-2ubuntu4.1)
+linux:package:dpkg	efibootmgr:amd64	Debian Package Installed: efibootmgr:amd64 (17-1ubuntu2)
+linux:package:dpkg	fwupd-signed:amd64	Debian Package Installed: fwupd-signed:amd64 (1.51.1~22.04.1+1.4-0ubuntu0.1)
+linux:package:dpkg	fwupd:amd64	Debian Package Installed: fwupd:amd64 (2.0.20-1ubuntu2~22.04.2)
+linux:package:dpkg	google-compute-engine-oslogin:amd64	Debian Package Installed: google-compute-engine-oslogin:amd64 (20260814.00-0ubuntu1~22.04.0)
+linux:package:dpkg	google-compute-engine:all	Debian Package Installed: google-compute-engine:all (20260819.00-0ubuntu1~22.04.0)
+linux:package:dpkg	google-guest-agent:amd64	Debian Package Installed: google-guest-agent:amd64 (20250116.00-0ubuntu1~22.04.4)
+linux:package:dpkg	google-osconfig-agent:amd64	Debian Package Installed: google-osconfig-agent:amd64 (20251028.00-0ubuntu2~22.04.1)
+linux:package:dpkg	grub-efi-amd64-bin:amd64	Debian Package Installed: grub-efi-amd64-bin:amd64 (2.06-2ubuntu14.8)
+linux:package:dpkg	grub-efi-amd64-signed:amd64	Debian Package Installed: grub-efi-amd64-signed:amd64 (1.187.12+2.06-2ubuntu14.8)
+linux:package:dpkg	hwdata:all	Debian Package Installed: hwdata:all (0.357-1)
+linux:package:dpkg	irqbalance:amd64	Debian Package Installed: irqbalance:amd64 (1.8.0-1ubuntu0.2)
+linux:package:dpkg	jq:amd64	Debian Package Installed: jq:amd64 (1.6-2.1ubuntu3.2)
+linux:package:dpkg	krb5-config:all	Debian Package Installed: krb5-config:all (2.6+nmu1ubuntu1)
+linux:package:dpkg	krb5-user:amd64	Debian Package Installed: krb5-user:amd64 (1.19.2-2ubuntu0.10)
+linux:package:dpkg	ldap-utils:amd64	Debian Package Installed: ldap-utils:amd64 (2.5.20+dfsg-0ubuntu0.22.04.1)
+linux:package:dpkg	libarchive13:amd64	Debian Package Installed: libarchive13:amd64 (3.6.0-1ubuntu1.9)
+linux:package:dpkg	libavahi-client3:amd64	Debian Package Installed: libavahi-client3:amd64 (0.8-5ubuntu5.5)
+linux:package:dpkg	libavahi-common-data:amd64	Debian Package Installed: libavahi-common-data:amd64 (0.8-5ubuntu5.5)
+linux:package:dpkg	libavahi-common3:amd64	Debian Package Installed: libavahi-common3:amd64 (0.8-5ubuntu5.5)
+linux:package:dpkg	libbasicobjects0:amd64	Debian Package Installed: libbasicobjects0:amd64 (0.6.2-1)
+linux:package:dpkg	libblockdev-crypto2:amd64	Debian Package Installed: libblockdev-crypto2:amd64 (2.26-1ubuntu0.1)
+linux:package:dpkg	libc-ares2:amd64	Debian Package Installed: libc-ares2:amd64 (1.18.1-1ubuntu0.22.04.4)
+linux:package:dpkg	libc-bin:amd64	Debian Package Installed: libc-bin:amd64 (2.35-0ubuntu3.15)
+linux:package:dpkg	libcollection4:amd64	Debian Package Installed: libcollection4:amd64 (0.6.2-1)
+linux:package:dpkg	libcrack2:amd64	Debian Package Installed: libcrack2:amd64 (2.9.6-3.4build4)
+linux:package:dpkg	libcups2:amd64	Debian Package Installed: libcups2:amd64 (2.4.1op1-1ubuntu4.21)
+linux:package:dpkg	libdhash1:amd64	Debian Package Installed: libdhash1:amd64 (0.6.2-1)
+linux:package:dpkg	libfwupd2:amd64	Debian Package Installed: libfwupd2:amd64 (1.7.9-1~22.04.3)
+linux:package:dpkg	libfwupd3:amd64	Debian Package Installed: libfwupd3:amd64 (2.0.20-1ubuntu2~22.04.2)
+linux:package:dpkg	libfwupdplugin5:amd64	Debian Package Installed: libfwupdplugin5:amd64 (1.7.9-1~22.04.3)
+linux:package:dpkg	libgcab-1.0-0:amd64	Debian Package Installed: libgcab-1.0-0:amd64 (1.4-3build2)
+linux:package:dpkg	libgpgme11:amd64	Debian Package Installed: libgpgme11:amd64 (1.16.0-1.2ubuntu4.2)
+linux:package:dpkg	libgssrpc4:amd64	Debian Package Installed: libgssrpc4:amd64 (1.19.2-2ubuntu0.10)
+linux:package:dpkg	libgudev-1.0-0:amd64	Debian Package Installed: libgudev-1.0-0:amd64 (1:237-2build1)
+linux:package:dpkg	libgusb2:amd64	Debian Package Installed: libgusb2:amd64 (0.3.10-1)
+linux:package:dpkg	libini-config5:amd64	Debian Package Installed: libini-config5:amd64 (0.6.2-1)
+linux:package:dpkg	libipa-hbac0:amd64	Debian Package Installed: libipa-hbac0:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	libjcat1:amd64	Debian Package Installed: libjcat1:amd64 (0.2.3-1~ubuntu0.22.04.1)
+linux:package:dpkg	libjq1:amd64	Debian Package Installed: libjq1:amd64 (1.6-2.1ubuntu3.2)
+linux:package:dpkg	libjson-glib-1.0-0:amd64	Debian Package Installed: libjson-glib-1.0-0:amd64 (1.6.6-1build1)
+linux:package:dpkg	libjson-glib-1.0-common:all	Debian Package Installed: libjson-glib-1.0-common:all (1.6.6-1build1)
+linux:package:dpkg	libkadm5clnt-mit12:amd64	Debian Package Installed: libkadm5clnt-mit12:amd64 (1.19.2-2ubuntu0.10)
+linux:package:dpkg	libkadm5srv-mit12:amd64	Debian Package Installed: libkadm5srv-mit12:amd64 (1.19.2-2ubuntu0.10)
+linux:package:dpkg	libkdb5-10:amd64	Debian Package Installed: libkdb5-10:amd64 (1.19.2-2ubuntu0.10)
+linux:package:dpkg	libldb2:amd64	Debian Package Installed: libldb2:amd64 (2:2.4.4-0ubuntu0.22.04.2)
+linux:package:dpkg	libnfsidmap1:amd64	Debian Package Installed: libnfsidmap1:amd64 (1:2.6.1-1ubuntu1.2)
+linux:package:dpkg	libnl-route-3-200:amd64	Debian Package Installed: libnl-route-3-200:amd64 (3.5.0-0.1)
+linux:package:dpkg	libnss-sss:amd64	Debian Package Installed: libnss-sss:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	libnuma1:amd64	Debian Package Installed: libnuma1:amd64 (2.0.14-3ubuntu2)
+linux:package:dpkg	libonig5:amd64	Debian Package Installed: libonig5:amd64 (6.9.7.1-2build1)
+linux:package:dpkg	libpam-krb5:amd64	Debian Package Installed: libpam-krb5:amd64 (4.11-1build1)
+linux:package:dpkg	libpam-pwquality:amd64	Debian Package Installed: libpam-pwquality:amd64 (1.4.4-1build2)
+linux:package:dpkg	libpam-sss:amd64	Debian Package Installed: libpam-sss:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	libpath-utils1:amd64	Debian Package Installed: libpath-utils1:amd64 (0.6.2-1)
+linux:package:dpkg	libprotobuf-c1:amd64	Debian Package Installed: libprotobuf-c1:amd64 (1.3.3-1ubuntu2.1)
+linux:package:dpkg	libpwquality-common:all	Debian Package Installed: libpwquality-common:all (1.4.4-1build2)
+linux:package:dpkg	libpwquality1:amd64	Debian Package Installed: libpwquality1:amd64 (1.4.4-1build2)
+linux:package:dpkg	libref-array1:amd64	Debian Package Installed: libref-array1:amd64 (0.6.2-1)
+linux:package:dpkg	libsasl2-modules-gssapi-mit:amd64	Debian Package Installed: libsasl2-modules-gssapi-mit:amd64 (2.1.27+dfsg2-3ubuntu1.2)
+linux:package:dpkg	libsmbclient:amd64	Debian Package Installed: libsmbclient:amd64 (2:4.15.13+dfsg-0ubuntu1.13)
+linux:package:dpkg	libsmbios-c2:amd64	Debian Package Installed: libsmbios-c2:amd64 (2.4.3-1build1)
+linux:package:dpkg	libsss-certmap0:amd64	Debian Package Installed: libsss-certmap0:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	libsss-idmap0:amd64	Debian Package Installed: libsss-idmap0:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	libsss-nss-idmap0:amd64	Debian Package Installed: libsss-nss-idmap0:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	libtalloc2:amd64	Debian Package Installed: libtalloc2:amd64 (2.3.3-2build1)
+linux:package:dpkg	libtdb1:amd64	Debian Package Installed: libtdb1:amd64 (1.4.5-2build1)
+linux:package:dpkg	libtevent0:amd64	Debian Package Installed: libtevent0:amd64 (0.11.0-1build1)
+linux:package:dpkg	libtraceevent1:amd64	Debian Package Installed: libtraceevent1:amd64 (1:1.3.3-1)
+linux:package:dpkg	libtss2-esys-3.0.2-0:amd64	Debian Package Installed: libtss2-esys-3.0.2-0:amd64 (3.2.0-1ubuntu1.1)
+linux:package:dpkg	libtss2-mu0:amd64	Debian Package Installed: libtss2-mu0:amd64 (3.2.0-1ubuntu1.1)
+linux:package:dpkg	libtss2-sys1:amd64	Debian Package Installed: libtss2-sys1:amd64 (3.2.0-1ubuntu1.1)
+linux:package:dpkg	libtss2-tcti-cmd0:amd64	Debian Package Installed: libtss2-tcti-cmd0:amd64 (3.2.0-1ubuntu1.1)
+linux:package:dpkg	libtss2-tcti-device0:amd64	Debian Package Installed: libtss2-tcti-device0:amd64 (3.2.0-1ubuntu1.1)
+linux:package:dpkg	libtss2-tcti-mssim0:amd64	Debian Package Installed: libtss2-tcti-mssim0:amd64 (3.2.0-1ubuntu1.1)
+linux:package:dpkg	libtss2-tcti-swtpm0:amd64	Debian Package Installed: libtss2-tcti-swtpm0:amd64 (3.2.0-1ubuntu1.1)
+linux:package:dpkg	libvolume-key1:amd64	Debian Package Installed: libvolume-key1:amd64 (0.3.12-3.1build3)
+linux:package:dpkg	libwbclient0:amd64	Debian Package Installed: libwbclient0:amd64 (2:4.15.13+dfsg-0ubuntu1.13)
+linux:package:dpkg	linux-gcp-6.8-headers-6.8.0-1070:amd64	Debian Package Installed: linux-gcp-6.8-headers-6.8.0-1070:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-gcp-6.8-tools-6.8.0-1070:amd64	Debian Package Installed: linux-gcp-6.8-tools-6.8.0-1070:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-gcp:amd64	Debian Package Installed: linux-gcp:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-headers-5.15.0-198-generic:amd64	Debian Package Installed: linux-headers-5.15.0-198-generic:amd64 (5.15.0-198.208)
+linux:package:dpkg	linux-headers-5.15.0-198:all	Debian Package Installed: linux-headers-5.15.0-198:all (5.15.0-198.208)
+linux:package:dpkg	linux-headers-6.8.0-1070-gcp:amd64	Debian Package Installed: linux-headers-6.8.0-1070-gcp:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-headers-gcp:amd64	Debian Package Installed: linux-headers-gcp:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-headers-generic:amd64	Debian Package Installed: linux-headers-generic:amd64 (5.15.0.198.171)
+linux:package:dpkg	linux-headers-virtual:amd64	Debian Package Installed: linux-headers-virtual:amd64 (5.15.0.198.171)
+linux:package:dpkg	linux-image-5.15.0-198-generic:amd64	Debian Package Installed: linux-image-5.15.0-198-generic:amd64 (5.15.0-198.208)
+linux:package:dpkg	linux-image-6.8.0-1070-gcp:amd64	Debian Package Installed: linux-image-6.8.0-1070-gcp:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-image-gcp:amd64	Debian Package Installed: linux-image-gcp:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-image-virtual:amd64	Debian Package Installed: linux-image-virtual:amd64 (5.15.0.198.171)
+linux:package:dpkg	linux-modules-5.15.0-198-generic:amd64	Debian Package Installed: linux-modules-5.15.0-198-generic:amd64 (5.15.0-198.208)
+linux:package:dpkg	linux-modules-6.8.0-1070-gcp:amd64	Debian Package Installed: linux-modules-6.8.0-1070-gcp:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-tools-6.8.0-1070-gcp:amd64	Debian Package Installed: linux-tools-6.8.0-1070-gcp:amd64 (6.8.0-1070.78~22.04.1)
+linux:package:dpkg	linux-tools-common:all	Debian Package Installed: linux-tools-common:all (5.15.0-198.208)
+linux:package:dpkg	linux-virtual:amd64	Debian Package Installed: linux-virtual:amd64 (5.15.0.198.171)
+linux:package:dpkg	man-db:amd64	Debian Package Installed: man-db:amd64 (2.10.2-1)
+linux:package:dpkg	modemmanager:amd64	Debian Package Installed: modemmanager:amd64 (1.20.0-1~ubuntu22.04.4)
+linux:package:dpkg	mokutil:amd64	Debian Package Installed: mokutil:amd64 (0.6.0-2~22.04.2)
+linux:package:dpkg	ntpdate:amd64	Debian Package Installed: ntpdate:amd64 (1:4.2.8p15+dfsg-1ubuntu2)
+linux:package:dpkg	nvme-cli:amd64	Debian Package Installed: nvme-cli:amd64 (1.16-3ubuntu0.3)
+linux:package:dpkg	pollinate:all	Debian Package Installed: pollinate:all (4.33-3ubuntu2.3)
+linux:package:dpkg	python3-ldb:amd64	Debian Package Installed: python3-ldb:amd64 (2:2.4.4-0ubuntu0.22.04.2)
+linux:package:dpkg	python3-sss:amd64	Debian Package Installed: python3-sss:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	python3-talloc:amd64	Debian Package Installed: python3-talloc:amd64 (2.3.3-2build1)
+linux:package:dpkg	realmd:amd64	Debian Package Installed: realmd:amd64 (0.17.0-1ubuntu2)
+linux:package:dpkg	rsyslog:amd64	Debian Package Installed: rsyslog:amd64 (8.2112.0-2ubuntu2.5)
+linux:package:dpkg	samba-libs:amd64	Debian Package Installed: samba-libs:amd64 (2:4.15.13+dfsg-0ubuntu1.13)
+linux:package:dpkg	shim-signed:amd64	Debian Package Installed: shim-signed:amd64 (1.51.4+15.8-0ubuntu1)
+linux:package:dpkg	sssd-ad-common:amd64	Debian Package Installed: sssd-ad-common:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-ad:amd64	Debian Package Installed: sssd-ad:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-common:amd64	Debian Package Installed: sssd-common:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-dbus:amd64	Debian Package Installed: sssd-dbus:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-ipa:amd64	Debian Package Installed: sssd-ipa:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-krb5-common:amd64	Debian Package Installed: sssd-krb5-common:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-krb5:amd64	Debian Package Installed: sssd-krb5:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-ldap:amd64	Debian Package Installed: sssd-ldap:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-proxy:amd64	Debian Package Installed: sssd-proxy:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd-tools:amd64	Debian Package Installed: sssd-tools:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	sssd:amd64	Debian Package Installed: sssd:amd64 (2.6.3-1ubuntu3.9)
+linux:package:dpkg	systemd-timesyncd:amd64	Debian Package Installed: systemd-timesyncd:amd64 (249.11-0ubuntu3.23)
+linux:package:dpkg	tpm-udev:all	Debian Package Installed: tpm-udev:all (0.6)
+linux:package:dpkg	udisks2:amd64	Debian Package Installed: udisks2:amd64 (2.9.4-1ubuntu2.3)
+linux:package:dpkg	wamerican:all	Debian Package Installed: wamerican:all (2020.12.07-2)
+linux:syslog:cron	cd	   cd / && run-parts --report /etc/cron.hourly
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-bvuerjtyiizhvezlppoouisocriokulg ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-crduyqpntcjzggukzzixpoxgqyryyxjl ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ctswgqjuvukuctkfcrbcwceqwdaqlzsw ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-cumzeiimsukwvggdfswadckzwrslglrj ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-dregentshhbqrfglgjaekjydefsjkjju ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-dyvryoblukfqhxyplpittmmmviqgipxe ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-epywccexzugpeswjadzxctgzmvqjdnca ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-fzcyogcwyzirwgvqgrlzhqauzorhtzhz ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ggfdzrutlchhqixpgoifpgacyenstfmt ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-gguhccgoznimbncqrcesjcylpfkhyank ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-glelwdurtylmihadvuqgvnazbxqcsyks ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-gxtvwuwqtgsxvxughpzcdnkzzzjkqftd ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-insggjyflplgohplqmzgvfqrhdbiryes ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-jludomgemktxoarmzjsghmglejxfkvbd ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-jqyamhssztspioelceuugudubnkciici ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-kgeatktscqxjadiaclszqidktnuguagl ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ktgfdnrvhuonehysimqjbrqmbjxcochi ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-luvxhlsrvxtoxcowxvnzthdnpehehaiq ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-lxptpgdmnretjxypgzsansywuovrurwn ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-manjwibvifxdeulgollcfetpzhymptec ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-mnmgoegsstggbjmasgfsguscqgfzpyfk ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-mtndvdibahooxuiatyrbotzhpjnbnruz ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-mwvxfnztvxuooqicrpppzgiienbczihw ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-nqyrsficxxzdhdinuhgjrxosheoquiex ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-omzmwcniruokaaffmreudnvmiozzqcpb ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-orknejcqojozfembuzmhqpxekomhxxwz ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ozytlxyivkycqmilkiamioppiqhlantw ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-plxxdwtpvdlgzpykesfrboahnbearcwn ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-rwnzqkiqszcdgcebcvsvgpdqofgdfsth ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-szurqslcqfwnhshxeboxuxtyuoyjuyud ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-tdeiegtulknfgvmjuilwptfvtxkzlddi ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-tkwkiuofeppptstiyyfdymdofscmtnja ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-ufyzexnmywlqquvjtymwkhitortcfoqx ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-uhefhipisykiwbmwetjesqgpewwjoecx ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-urnmesbvlbazctanmxbpagxnwrimgsrn ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-wkqlqhvdwbddpyipnzsflpsjkedyjdrt ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-wojudfzwnhshcyiebdrjurpxqznenryv ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-xfyygnsfizbtgujdwicsqiplgeijebzp ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-xgqefiarrqdmuaxcyyiphjifeknaemnb ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-xxvfiyflnqvhorvxyvercdxtrkipujcz ; /usr/bin/python3.10'
+linux:syslog:sudo	/bin/sh	/bin/sh -c 'echo BECOME-SUCCESS-yremiixthuxkhobulmuiljzlwilvzdqm ; /usr/bin/python3.10'
+linux:syslog:sudo	/usr/bin/hostnamectl	/usr/bin/hostnamectl set-hostname LEO-LNX01.leoncorp.test
+linux:syslog:sudo	/usr/bin/kinit	/usr/bin/kinit administrator
+linux:syslog:sudo	/usr/sbin/pam-auth-update	/usr/sbin/pam-auth-update --enable mkhomedir
+linux:syslog:sudo	/usr/sbin/realm	/usr/sbin/realm join --client-software=sssd leoncorp.test
+linux:syslog:sudo	/usr/sbin/realm	/usr/sbin/realm join -v -U administrator leoncorp.test
+linux:utmp:boot	~	System boot: reboot on ~ from 6.8.0-1070-gcp
+linux:utmp:runlevel	~	Run level change: runlevel on ~ from 6.8.0-1070-gcp
+linux:utmp:runlevel	~	Run level change: shutdown on ~ from 6.8.0-1070-gcp

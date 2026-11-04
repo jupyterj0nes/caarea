@@ -29,6 +29,7 @@
 //! the code and in the findings table; it sets the level and ranks the table, and never goes
 //! into the timeline.
 
+pub mod clean;
 pub mod genealogy;
 pub mod names;
 pub mod naming;
@@ -248,7 +249,9 @@ pub fn run(events: &[Event], start: Option<&str>, end: Option<&str>) -> Vec<Find
 
 /// The tail of every row of a timeline of `rows` rows, the convention of the four tools.
 /// A rule measured common (rarity below `NOISE_BELOW` points: it fires on more than one
-/// clean row in ten) is noise: it gives no state and no points, only its clause. Of the
+/// clean row in ten) is noise: it gives no state and no points, only its clause. A row
+/// the clean reference hosts also produce ([`clean`]) is vouched for by identity: its
+/// rules keep their clause, add nothing, and the row is `habitual` with score 0. Of the
 /// rest, the strongest gives `hunt` (high `significant`, medium `candidate`; low
 /// `candidate` too, since no test judged the row and a score must come with a state),
 /// every rule adds its measured rarity to `hunt_score` (capped at 100), every rule gives
@@ -265,14 +268,23 @@ pub fn tails(rows: usize, findings: &[Finding]) -> Vec<Tail> {
             continue;
         }
         fs.sort_by(|a, b| b.level().cmp(&a.level()).then(b.score.cmp(&a.score)).then(a.rule_id.cmp(b.rule_id)));
+        let vouched = clean::is_clean(&fs[0].artifact, &fs[0].processname, &fs[0].commandline);
         let counts = |f: &Finding| f.rarity().is_none_or(|r| r >= NOISE_BELOW);
-        let hunt = fs.iter().find(|f| counts(f)).map(|f| f.level().state().unwrap_or(HUNT_CANDIDATE)).unwrap_or("");
-        let score: u32 = fs.iter().filter(|f| counts(f)).map(|f| f.rarity().unwrap_or(0) as u32).sum();
         let mut why: Vec<String> = fs.iter().map(|f| f.clause()).collect();
+        if vouched {
+            why.push(clean::REASON.to_string());
+        }
         if !fs[0].lineage.is_empty() {
             why.push(format!("lineage: {}", fs[0].lineage));
         }
-        out[row] = Tail { hunt, hunt_score: Some(score.min(SCORE_MAX as u32) as u8), hunt_why: why.join("; "), ..Default::default() };
+        let (hunt, score) = if vouched {
+            (HUNT_HABITUAL, 0)
+        } else {
+            let hunt = fs.iter().find(|f| counts(f)).map(|f| f.level().state().unwrap_or(HUNT_CANDIDATE)).unwrap_or("");
+            let score: u32 = fs.iter().filter(|f| counts(f)).map(|f| f.rarity().unwrap_or(0) as u32).sum();
+            (hunt, score.min(SCORE_MAX as u32) as u8)
+        };
+        out[row] = Tail { hunt, hunt_score: Some(score), hunt_why: why.join("; "), ..Default::default() };
     }
     out
 }
