@@ -85,6 +85,7 @@ pub fn record_event(rec: &[u8], big: bool, failed_log: bool, computer: &str, sou
         details.push_str(&format!(" from {}", host));
     }
     Some(Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer.to_string(),
         artifact: artifact.to_string(),

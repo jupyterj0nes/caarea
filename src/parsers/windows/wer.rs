@@ -91,6 +91,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
     vec![Event {
+        source_file: String::new(),
         timestamp,
         computer: computer.to_string(),
         artifact: "wer".to_string(),

@@ -208,7 +208,9 @@ pub fn process_windows_target(target: &Path, silent: bool, hint: Option<&str>) -
     for (kind, paths) in &found {
         let before = events.len();
         for path in paths {
-            events.extend(parse_kind(*kind, path, &computer, silent));
+            let mut file_events = parse_kind(*kind, path, &computer, silent);
+            crate::utils::stamp_source_file(&mut file_events, &crate::utils::source_file_name(target, path));
+            events.extend(file_events);
         }
         summary.push(format!("{} {} file(s) -> {} rows", paths.len(), kind.label(), events.len() - before));
     }
@@ -220,5 +222,7 @@ pub fn process_windows_target(target: &Path, silent: bool, hint: Option<&str>) -
 pub fn process_windows_file(path: &Path, header: &[u8], silent: bool) -> Option<Vec<Event>> {
     let kind = if prefetch::is_prefetch(header) { Some(Kind::Prefetch) } else { classify(path) }?;
     let computer = path.parent().map(|p| detect_hostname(p, None)).unwrap_or_else(|| "Unknown".to_string());
-    Some(parse_kind(kind, path, &computer, silent))
+    let mut events = parse_kind(kind, path, &computer, silent);
+    crate::utils::stamp_source_file(&mut events, &crate::utils::source_file_name(path, path));
+    Some(events)
 }

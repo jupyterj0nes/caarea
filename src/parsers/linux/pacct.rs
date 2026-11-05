@@ -131,6 +131,7 @@ pub fn record_event(rec: &AcctRecord, computer_name: &str) -> Option<Event> {
     );
     let user_label = if rec.uid == 0 { "root".to_string() } else { rec.uid.to_string() };
     Some(Event {
+        source_file: String::new(),
         timestamp: iso_ts,
         computer: computer_name.to_string(),
         artifact: "linux:process:pacct".to_string(),

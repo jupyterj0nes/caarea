@@ -43,6 +43,7 @@ pub fn parse_segfault_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
                 let details = caps[3].to_string();
 
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: fallback_timestamp.clone(),
                     computer: computer_name.to_string(),
                     artifact: "linux:crash:segfault".to_string(),

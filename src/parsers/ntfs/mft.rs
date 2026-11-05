@@ -336,6 +336,7 @@ pub fn standalone_record_events(raw: &[u8], computer: &str, source: &str) -> Vec
     let mut push = |ts: Option<String>, kind: &str| {
         if let Some(ts) = ts {
             events.push(Event {
+                source_file: String::new(),
                 timestamp: ts,
                 computer: computer.to_string(),
                 artifact: format!("ntfs:mft:{}", kind),
@@ -439,6 +440,7 @@ pub fn parse_mft_file(path: &Path, computer: &str) -> Result<MftResult, String> 
                 deleted_rows += 1;
             }
             events.push(Event {
+                source_file: String::new(),
                 timestamp: ts,
                 computer: computer.to_string(),
                 artifact,

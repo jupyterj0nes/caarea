@@ -49,6 +49,7 @@ pub fn events(hive: &Hive, computer: &str, source: &str) -> Vec<Event> {
             details.push_str(&format!(" USN {}", u));
         }
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer.to_string(),
             artifact: "registry:syscache".to_string(),

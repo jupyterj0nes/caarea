@@ -102,6 +102,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Result<SrumResult, String> {
     let name_of = |id: i64| names.get(&id).cloned().unwrap_or_else(|| format!("#{}", id));
     let mut events = Vec::new();
     let mk = |ts: String, artifact: &str, user: String, app: String, details: String| Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer.to_string(),
         artifact: artifact.to_string(),

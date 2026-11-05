@@ -20,6 +20,7 @@ fn test_default_hive_parsing_if_available() {
 #[test]
 fn test_event_timeline_sorting() {
     let e1 = Event {
+        source_file: String::new(),
         timestamp: "2025-01-01T12:00:00Z".to_string(),
         computer: "HOST1".to_string(),
         artifact: "evtx:4688".to_string(),
@@ -33,6 +34,7 @@ fn test_event_timeline_sorting() {
         meta: None,
     };
     let e2 = Event {
+        source_file: String::new(),
         timestamp: "2024-12-31T23:59:59Z".to_string(),
         computer: "HOST1".to_string(),
         artifact: "registry:bam".to_string(),
@@ -56,6 +58,7 @@ fn test_event_timeline_sorting() {
 fn test_toi_window_filtering() {
     let events = vec![
         Event {
+            source_file: String::new(),
             timestamp: "2025-08-24T08:00:00Z".to_string(),
             computer: "SRV01".to_string(),
             artifact: "registry:shimcache".to_string(),
@@ -69,6 +72,7 @@ fn test_toi_window_filtering() {
             meta: None,
         },
         Event {
+            source_file: String::new(),
             timestamp: "2025-08-25T14:30:00Z".to_string(),
             computer: "SRV01".to_string(),
             artifact: "evtx:4688".to_string(),
@@ -82,6 +86,7 @@ fn test_toi_window_filtering() {
             meta: None,
         },
         Event {
+            source_file: String::new(),
             timestamp: "2025-08-27T00:00:00Z".to_string(),
             computer: "SRV01".to_string(),
             artifact: "registry:tasks:last_start".to_string(),

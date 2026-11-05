@@ -360,6 +360,7 @@ mod tests {
 
     fn ev(artifact: &str, name: &str) -> Event {
         Event {
+            source_file: String::new(),
             timestamp: "2026-01-01T00:00:00.000000Z".to_string(),
             computer: "PC".to_string(),
             artifact: artifact.to_string(),

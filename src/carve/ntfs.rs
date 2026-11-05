@@ -82,6 +82,7 @@ pub fn indx_events(entries: &[IndxEntry], computer: &str, source: &str) -> Vec<E
             .map(|d| crate::utils::iso_utc(&d))
             .unwrap_or_default();
         out.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer.to_string(),
             artifact: "ntfs:i30:deleted".to_string(),
@@ -137,6 +138,7 @@ pub fn usn_events(rec: &UsnRecord, computer: &str, source: &str) -> Option<Event
     let (kind, description) = classify(rec, false, "")?;
     let exe = if kind.starts_with("prefetch") { crate::parsers::ntfs::usn::prefetch_executable(&rec.name) } else { format!("[CARVED]\\{}", rec.name) };
     Some(Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer.to_string(),
         artifact: format!("ntfs:usn:{}", kind),

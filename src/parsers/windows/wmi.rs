@@ -240,6 +240,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
             _ => "WMI __FilterToConsumerBinding",
         };
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer.to_string(),
             artifact: hit.artifact.to_string(),

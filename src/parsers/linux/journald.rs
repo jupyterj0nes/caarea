@@ -86,6 +86,7 @@ pub fn parse_file(path: &Path, computer_hint: &str) -> Vec<Event> {
         let who = |e: &systemd_journal_reader::Entry| field(e, "SUDO_USER").unwrap_or_else(|| uid.clone());
 
         let mk = |ts: String, artifact: &str, subject: String, target: String, proc: String, cmd: String, parent: String| Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: host.clone(),
             artifact: artifact.to_string(),

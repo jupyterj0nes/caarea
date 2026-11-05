@@ -257,6 +257,7 @@ pub fn parse_buffer(data: &[u8], source: &str, computer: &str, dirs: &HashMap<u6
         }
         let exe_for_pf = if kind.starts_with("prefetch") { Some(prefetch_executable(&rec.name)) } else { None };
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer.to_string(),
             artifact: format!("ntfs:usn:{}", kind),

@@ -52,6 +52,7 @@ pub fn parse_cron_table_file(file_path: &Path, computer_name: &str) -> Vec<Event
                 let process_name = cmd_tokens.first().unwrap_or(&"cron").to_string();
 
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: fallback_timestamp.clone(),
                     computer: computer_name.to_string(),
                     artifact: "linux:cron:scheduled_job".to_string(),
@@ -73,6 +74,7 @@ pub fn parse_cron_table_file(file_path: &Path, computer_name: &str) -> Vec<Event
                 let process_name = tokens.get(6).unwrap_or(&"cron").to_string();
 
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: fallback_timestamp.clone(),
                     computer: computer_name.to_string(),
                     artifact: "linux:cron:scheduled_job".to_string(),
@@ -137,6 +139,7 @@ pub fn parse_systemd_service_file(file_path: &Path, computer_name: &str) -> Vec<
     for exec in exec_starts {
         let proc_name = exec.split_whitespace().next().unwrap_or(&exec).to_string();
         events.push(Event {
+            source_file: String::new(),
             timestamp: fallback_timestamp.clone(),
             computer: computer_name.to_string(),
             artifact: "linux:systemd:service".to_string(),
@@ -163,6 +166,7 @@ pub fn parse_timer_stamp(file_path: &Path, computer_name: &str) -> Vec<Event> {
         return Vec::new();
     };
     vec![Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer_name.to_string(),
         artifact: "linux:systemd:timer_triggered".to_string(),
@@ -205,6 +209,7 @@ pub fn parse_timer_unit(file_path: &Path, computer_name: &str) -> Vec<Event> {
         unit = format!("{}.service", filename.trim_end_matches(".timer"));
     }
     vec![Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer_name.to_string(),
         artifact: "linux:systemd:timer".to_string(),
@@ -261,6 +266,7 @@ pub fn parse_running_processes_paths(file_path: &Path, computer_name: &str) -> V
                     };
 
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: fallback_timestamp.clone(),
                         computer: computer_name.to_string(),
                         artifact: artifact_label.to_string(),

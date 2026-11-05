@@ -80,6 +80,7 @@ pub fn parse_xbel_file(file_path: &Path, computer_name: &str) -> Vec<Event> {
                         let clean_path = current_href.strip_prefix("file://").unwrap_or(&current_href);
 
                         events.push(Event {
+                            source_file: String::new(),
                             timestamp: normalize_iso(&ts).unwrap_or(ts),
                             computer: computer_name.to_string(),
                             artifact: "linux:gui:recently_used".to_string(),

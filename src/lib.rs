@@ -260,6 +260,11 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         if let Some(prov) = origin {
             tag_events(&mut dir_events, prov);
         }
+        if let Some(label) = workspace.container_label(dir) {
+            for e in dir_events.iter_mut() {
+                e.source_file = format!("{}:{}", label, e.source_file);
+            }
+        }
         all_events.extend(dir_events);
     }
 
@@ -298,7 +303,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                 .clone()
                 .or_else(|| parent.map(HostTimezone::detect))
                 .unwrap_or_else(HostTimezone::utc);
-            let linux_events = parsers::linux::process_linux_file_tz(path, &hostname, &tz);
+            let mut linux_events = parsers::linux::process_linux_file_tz(path, &hostname, &tz);
+            utils::stamp_source_file(&mut linux_events, &utils::source_file_name(path, path));
             if linux_events.is_empty() {
                 log_message(silent, &format!("⚠️ No parser recognised file: {}", path.display()));
             }
@@ -387,6 +393,7 @@ mod tests {
 
     fn ev(ts: &str, proc_name: &str, cmd: &str, pid: u32) -> Event {
         Event {
+            source_file: String::new(),
             timestamp: ts.to_string(),
             computer: "H".to_string(),
             artifact: "linux:shell:bash_history".to_string(),

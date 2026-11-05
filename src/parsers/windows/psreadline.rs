@@ -39,6 +39,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
             }
             let first = first.trim_matches(|c| c == '"' || c == '\'');
             Event {
+                source_file: String::new(),
                 timestamp: minus_micros(&mtime, n - 1 - i as i64),
                 computer: computer.to_string(),
                 artifact: "powershell:history".to_string(),

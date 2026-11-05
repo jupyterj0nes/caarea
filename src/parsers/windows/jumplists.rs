@@ -127,6 +127,7 @@ pub fn parse_jumplist(path: &Path, computer: &str) -> Vec<Event> {
             continue;
         }
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer.to_string(),
             artifact: kind.to_string(),
@@ -156,6 +157,7 @@ pub fn parse_lnk(path: &Path, computer: &str) -> Vec<Event> {
         return Vec::new();
     }
     vec![Event {
+        source_file: String::new(),
         timestamp: mtime,
         computer: computer.to_string(),
         artifact: "lnk".to_string(),

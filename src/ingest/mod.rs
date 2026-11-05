@@ -38,9 +38,27 @@ pub struct EvidenceWorkspace {
     /// Rows produced during ingestion itself (carved structures that are not files)
     pub events: Vec<crate::parsers::evtx::Event>,
     temp_dir: Option<PathBuf>,
+    /// Where archives and images were unpacked (the temporary folder or `--stage-dir`), when any were.
+    staging_root: Option<PathBuf>,
 }
 
 impl EvidenceWorkspace {
+    /// The container a staged directory came from, for `source_file`: the archive's stem
+    /// (`uac-host-linux-20260101`, the `__hash` the staging adds removed) or the image's folder
+    /// and partition (`disk/partition_0_vss_0`). `None` for a directory given on the command line.
+    pub fn container_label(&self, dir: &str) -> Option<String> {
+        let root = self.staging_root.as_ref()?;
+        let rel = Path::new(dir).strip_prefix(root).ok()?;
+        let mut parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
+        let first = parts.first_mut()?;
+        if let Some(pos) = first.rfind("__") {
+            if first.len() - pos == 10 && first[pos + 2..].chars().all(|c| c.is_ascii_hexdigit()) {
+                first.truncate(pos);
+            }
+        }
+        Some(parts.join("/"))
+    }
+
     /// Hostname hint for a directory, if ingestion learnt one
     pub fn hostname_hint(&self, dir: &str) -> Option<&str> {
         self.hostnames.get(dir).map(|s| s.as_str())
@@ -135,6 +153,7 @@ pub fn prepare_evidence(
 
     // 3. Staging directory setup if archives or images need extraction
     let mut temp_staging_dir: Option<PathBuf> = None;
+    let mut staging_root: Option<PathBuf> = None;
 
     if !archives_to_extract.is_empty() || !images_to_extract.is_empty() || !blobs_to_carve.is_empty() {
         let staging = match stage_dir {
@@ -151,6 +170,7 @@ pub fn prepare_evidence(
                 staging
             }
         };
+        staging_root = Some(staging.clone());
 
         // Process forensic disk images
         if !images_to_extract.is_empty() {
@@ -302,6 +322,7 @@ pub fn prepare_evidence(
         origins,
         events,
         temp_dir: temp_staging_dir,
+        staging_root,
     })
 }
 

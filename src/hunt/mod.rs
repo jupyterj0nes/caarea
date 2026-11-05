@@ -1,7 +1,7 @@
 //! Process hunting over the finished timeline: rules that mark rows an analyst should read
 //! first, each with an ATT&CK technique and an explanation in words.
 //!
-//! The hunt never touches the ten event columns. Its verdict goes into the analysis tail
+//! The hunt never touches the fourteen event columns. Its verdict goes into the analysis tail
 //! every timeline carries (`hunt`, `hunt_score`, `hunt_why`, `verdict`, `notes`: the five
 //! columns that close the CSVs of masstin, faramir and allymacb, one convention for the four
 //! tools; masstin's `docs/csv-format.md` is the reference), and the detailed findings go to
@@ -42,7 +42,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-/// The five columns that close every timeline, after the ten event columns.
+/// The five columns that close every timeline, after the fourteen event columns.
 pub const TAIL_COLUMNS: [&str; 5] = ["hunt", "hunt_score", "hunt_why", "verdict", "notes"];
 
 /// The tail of a row nothing has judged, written bare.
@@ -506,6 +506,7 @@ mod tests {
 
     fn mk(ts: &str, pid: u32, ppid: u32, name: &str, parent: &str) -> Event {
         Event {
+            source_file: String::new(),
             timestamp: ts.to_string(),
             computer: "PC".to_string(),
             artifact: "evtx:4688".to_string(),

@@ -123,6 +123,7 @@ pub fn events_for_hive(bytes: &[u8], computer: &str, user: &str, source: &str) -
     let hive_time = filetime_to_iso(image.hive_timestamp());
     let mut events = Vec::new();
     let mk = |ts: String, artifact: &str, user: String, proc: String, details: String| Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer.to_string(),
         artifact: deleted.apply(artifact),

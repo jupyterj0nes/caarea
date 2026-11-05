@@ -84,7 +84,7 @@ every live parser added in phases 1 to 6 is also what phases 7 to 9 carve.
 - **Every carved object is parsed under a time budget** (thread + timeout), not
   only EVTX: sootmark over a garbage `hbin` or the `mft` crate over a pagefile page
   must never hang the run.
-- **The ten event columns do not change.** After them comes masstin's analysis tail
+- **The fourteen event columns do not change.** (Ten until v0.3.0; `state`, `reserved_1`, `reserved_2` and `source_file` joined them to sit in masstin's verticals.) After them comes masstin's analysis tail
   (`hunt`, `hunt_score`, `hunt_why`, `verdict`, `notes`), so a case tool maps the tail once
   for caarea, masstin, faramir and allymacb.
 
@@ -407,7 +407,7 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   parent/child/path), `--hunt-report <md>` (per host, grouped by lineage, ranked),
   `--hunt-only -f timeline.csv` (re-hunt a CSV with the reduced information it holds,
   annotated in place through a temporary file, `verdict` / `notes` kept, `--carry-marks`
-  by row hash over the ten event columns, `--no-annotate`, 10- and 15-column input),
+  by row hash over the fourteen event columns, `--no-annotate`, 15- and 19-column input),
   validation on EVTX-ATTACK-SAMPLES by technique.
 - **H6 (optional)**: Sigma `process_creation` subset (`Image`, `CommandLine`,
   `ParentImage`, `User`, `contains|startswith|endswith|all|re`).

@@ -154,6 +154,7 @@ pub fn parse_syslog_file(file_path: &Path, default_computer: &str, tz: &HostTime
         let proc_name = command.split_whitespace().next().unwrap_or(&command).to_string();
 
         events.push(Event {
+            source_file: String::new(),
             timestamp: iso_ts,
             computer: if host.is_empty() { default_computer.to_string() } else { host.to_string() },
             artifact: artifact.to_string(),

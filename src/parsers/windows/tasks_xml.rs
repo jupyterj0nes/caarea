@@ -137,6 +137,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
                 details.push_str(" | DISABLED");
             }
             Event {
+                source_file: String::new(),
                 timestamp: mtime.clone(),
                 computer: computer.to_string(),
                 artifact: "task:xml".to_string(),

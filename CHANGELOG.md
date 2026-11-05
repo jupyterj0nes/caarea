@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Nineteen columns, in masstin's verticals
+
+The timeline has the width and the column order of masstin's, like faramir's and allymacb's: fourteen event columns, each in the position of the masstin column closest in meaning and under caarea's own name, then the five-column tail. Readers of the fifteen-column layout need updating; the ten columns of v0.3.0 keep their values, byte for byte (compared on the DeepBlueCLI set, 13,590 rows), only their positions change.
+
+- `timestamp, computer, artifact, event_id, state, target_username, reserved_1, processname, parentprocessname, subject_username, reserved_2, pid, commandline, source_file` and then `hunt, hunt_score, hunt_why, verdict, notes` ([docs/csv-format.md](docs/csv-format.md) has the table against masstin's). `target_username` moves ahead of `subject_username`, `parentprocessname` next to `processname` (masstin's source address: where it came from), `pid` to masstin's session id.
+- **`state`** (vertical 5, masstin's logon type, faramir's `state`): how the row was obtained, `live`, `vss`, `deleted`, `txlog`, `carved`, `carved:deleted`, the segment `artifact` already carried, now on its own so it filters in one click.
+- **`source_file`** (vertical 14, masstin's `log_filename`): the file the row was read from, relative to the evidence it came in, with the container first when there is one (`export/logs/Security.evtx`, `lnx01-logs:var/log/auth.log`, `disk:partition_0_vss_0/Windows/System32/config/SYSTEM`, the carved blob's name, the file name for `-f`). Every parser family stamps it per file (`utils::stamp_source_file`), the ingest adds the container (`EvidenceWorkspace::container_label`). The README's old "no source file column by design" is gone with it.
+- `reserved_1` and `reserved_2` are always empty: masstin's domains have no execution equivalent.
+- `timeline::event_csv` writes the fourteen; a unit test pins the header, the verticals and a row.
+
 ## v0.3.0 (2026-11-05)
 
 ### The hunt closes with the rows that deserve reading first

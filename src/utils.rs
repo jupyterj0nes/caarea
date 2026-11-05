@@ -1,7 +1,26 @@
 use chrono::{DateTime, NaiveDate, NaiveDateTime, SecondsFormat, Utc};
+use std::path::Path;
 use std::time::SystemTime;
 
 use crate::parsers::evtx::Event;
+
+/// What `source_file` says for a file: its path relative to the target it was found under
+/// (`export/logs/Security.evtx`, `partition_0_vss_0/Windows/System32/config/SYSTEM`), with
+/// forward slashes; the file name alone when the file is the target itself (`-f`).
+pub fn source_file_name(target: &Path, path: &Path) -> String {
+    let rel = path.strip_prefix(target).ok().filter(|r| !r.as_os_str().is_empty());
+    let shown = rel.map(|r| r.to_path_buf()).unwrap_or_else(|| path.file_name().map(std::path::PathBuf::from).unwrap_or_default());
+    shown.to_string_lossy().replace(char::from(92), "/")
+}
+
+/// Stamps `source_file` on every event that does not carry one yet.
+pub fn stamp_source_file(events: &mut [Event], name: &str) {
+    for e in events.iter_mut() {
+        if e.source_file.is_empty() {
+            e.source_file = name.to_string();
+        }
+    }
+}
 
 /// Canonical timestamp representation used by every parser:
 /// `YYYY-MM-DDTHH:MM:SS.ffffffZ` (UTC, microseconds, fixed width).
@@ -173,6 +192,7 @@ mod tests {
 
     fn ev(ts: &str, proc_name: &str) -> Event {
         Event {
+            source_file: String::new(),
             timestamp: ts.to_string(),
             computer: "PC1".to_string(),
             artifact: "evtx:4688".to_string(),

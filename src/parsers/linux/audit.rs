@@ -223,6 +223,7 @@ pub fn parse_audit_lines(lines: impl Iterator<Item = String>, computer_name: &st
                 let user_label = resolve_user(&pairs);
 
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: iso_ts,
                     computer: computer_name.to_string(),
                     artifact: "linux:audit:user_cmd".to_string(),
@@ -295,6 +296,7 @@ pub fn parse_audit_lines(lines: impl Iterator<Item = String>, computer_name: &st
                     }
                 };
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: iso_ts,
                     computer: computer_name.to_string(),
                     artifact: artifact.to_string(),
@@ -387,6 +389,7 @@ pub fn parse_audit_lines(lines: impl Iterator<Item = String>, computer_name: &st
         }
 
         events.push(Event {
+            source_file: String::new(),
             timestamp: iso_ts,
             computer: computer_name.to_string(),
             artifact: "linux:audit:execve".to_string(),

@@ -55,6 +55,7 @@ fn docker(v: &Value, computer: &str, source: &str) -> Vec<Event> {
     let entrypoint = join_array(&v["Config"]["Entrypoint"]);
     let pid = v["State"]["Pid"].as_u64().unwrap_or(0) as u32;
     let mk = |ts: String, kind: &str, what: &str| Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer.to_string(),
         artifact: format!("linux:container:{}", kind),
@@ -99,6 +100,7 @@ fn containerd(v: &Value, computer: &str, source: &str, path: &Path) -> Vec<Event
         return Vec::new();
     };
     vec![Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer.to_string(),
         artifact: "linux:container:started".to_string(),
@@ -122,6 +124,7 @@ fn podman(v: &Value, computer: &str, source: &str) -> Vec<Event> {
             let id = s(c, &["id"]).chars().take(12).collect::<String>();
             if let Some(ts) = time(&s(c, &["created"])) {
                 out.push(Event {
+                    source_file: String::new(),
                     timestamp: ts,
                     computer: computer.to_string(),
                     artifact: "linux:container:created".to_string(),

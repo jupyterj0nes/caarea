@@ -69,6 +69,7 @@ pub fn parse_bash_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
         let proc_name = trimmed.split_whitespace().next().unwrap_or(trimmed).to_string();
 
         events.push(Event {
+            source_file: String::new(),
             timestamp: iso_ts,
             computer: computer_name.to_string(),
             artifact: "linux:shell:bash_history".to_string(),
@@ -98,6 +99,7 @@ pub fn parse_fish_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
         if let (Some(c), Some(e)) = (cmd.take(), epoch) {
             if let Some(ts) = epoch_to_iso(e, 0) {
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: ts,
                     computer: computer_name.to_string(),
                     artifact: "linux:shell:fish_history".to_string(),
@@ -156,6 +158,7 @@ pub fn parse_zsh_history(file_path: &Path, computer_name: &str) -> Vec<Event> {
                     let proc_name = command.split_whitespace().next().unwrap_or(command).to_string();
 
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: iso_ts,
                         computer: computer_name.to_string(),
                         artifact: "linux:shell:zsh_history".to_string(),
@@ -219,6 +222,7 @@ pub fn parse_viminfo(file_path: &Path, computer_name: &str) -> Vec<Event> {
             "cmd" => {
                 if trimmed.starts_with(':') && trimmed.len() > 1 {
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: fallback_timestamp.clone(),
                         computer: computer_name.to_string(),
                         artifact: "linux:editor:vim_command".to_string(),
@@ -243,6 +247,7 @@ pub fn parse_viminfo(file_path: &Path, computer_name: &str) -> Vec<Event> {
                         let file_edited = parts[3..].join(" ");
 
                         events.push(Event {
+                            source_file: String::new(),
                             timestamp: fallback_timestamp.clone(),
                             computer: computer_name.to_string(),
                             artifact: "linux:editor:vim_file_edit".to_string(),
@@ -263,6 +268,7 @@ pub fn parse_viminfo(file_path: &Path, computer_name: &str) -> Vec<Event> {
                 if trimmed.starts_with("> ") && trimmed.len() > 2 {
                     let file_edited = &trimmed[2..];
                     events.push(Event {
+                        source_file: String::new(),
                         timestamp: fallback_timestamp.clone(),
                         computer: computer_name.to_string(),
                         artifact: "linux:editor:vim_file_edit".to_string(),

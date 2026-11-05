@@ -48,6 +48,7 @@ pub fn parse_cloud_init_log(path: &Path, computer: &str, tz: &HostTimezone) -> V
             continue;
         }
         events.push(Event {
+            source_file: String::new(),
             timestamp: iso_utc(&tz.local_to_utc(ndt)),
             computer: computer.to_string(),
             artifact: "linux:cloud_init:command".to_string(),
@@ -89,6 +90,7 @@ pub fn parse_mail_spool(path: &Path, computer: &str) -> Vec<Event> {
             None => (user.clone(), rest.to_string()),
         };
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer.to_string(),
             artifact: "linux:cron:mail".to_string(),

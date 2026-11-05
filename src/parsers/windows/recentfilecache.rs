@@ -51,6 +51,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
         .into_iter()
         .enumerate()
         .map(|(i, p)| Event {
+            source_file: String::new(),
             timestamp: minus_micros(&mtime, (n - i) as i64),
             computer: computer.to_string(),
             artifact: "recentfilecache".to_string(),

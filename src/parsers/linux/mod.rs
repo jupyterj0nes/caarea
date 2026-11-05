@@ -411,7 +411,9 @@ pub fn process_linux_target_with_hint(
         if !path.is_file() {
             continue;
         }
-        all_events.extend(process_linux_file_tz(path, &hostname, &tz));
+        let mut file_events = process_linux_file_tz(path, &hostname, &tz);
+        crate::utils::stamp_source_file(&mut file_events, &crate::utils::source_file_name(target, path));
+        all_events.extend(file_events);
     }
 
     all_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));

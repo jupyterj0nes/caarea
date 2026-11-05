@@ -399,6 +399,7 @@ mod tests {
 
     fn win(ts: &str, pid: u32, ppid: u32, name: &str, parent: &str, user: &str) -> Event {
         Event {
+            source_file: String::new(),
             timestamp: ts.to_string(),
             computer: "PC".to_string(),
             artifact: "evtx:4688".to_string(),

@@ -327,6 +327,7 @@ mod tests {
 
     fn start(ts: &str, host: &str, pid: u32, ppid: u32, name: &str, parent: &str) -> Event {
         Event {
+            source_file: String::new(),
             timestamp: ts.to_string(),
             computer: host.to_string(),
             artifact: "evtx:4688".to_string(),

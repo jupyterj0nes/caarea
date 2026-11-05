@@ -164,7 +164,9 @@ pub fn process_ntfs_target(target: &Path, silent: bool, hint: Option<&str>) -> V
                 if dirs.is_empty() {
                     dirs = res.dirs;
                 }
-                events.extend(res.events);
+                let mut rows = res.events;
+                crate::utils::stamp_source_file(&mut rows, &crate::utils::source_file_name(target, path));
+                events.extend(rows);
             }
             Err(e) => log_message(silent, &format!("  ⚠️ $MFT {}: {}", path.display(), e)),
         }
@@ -182,7 +184,9 @@ pub fn process_ntfs_target(target: &Path, silent: bool, hint: Option<&str>) -> V
                         res.prefetch_rows
                     ),
                 );
-                events.extend(res.events);
+                let mut rows = res.events;
+                crate::utils::stamp_source_file(&mut rows, &crate::utils::source_file_name(target, path));
+                events.extend(rows);
             }
             Err(e) => log_message(silent, &format!("  ⚠️ $UsnJrnl {}: {}", path.display(), e)),
         }
@@ -197,7 +201,11 @@ pub fn process_ntfs_file(path: &Path, header: &[u8], silent: bool) -> Option<Vec
     let computer = path.parent().map(|p| detect_hostname(p, None)).unwrap_or_else(|| "Unknown".to_string());
     if looks_mft && (is_mft_name(&name) || header.starts_with(b"FILE")) {
         return match mft::parse_mft_file(path, &computer) {
-            Ok(res) => Some(res.events),
+            Ok(res) => {
+                let mut rows = res.events;
+                crate::utils::stamp_source_file(&mut rows, &crate::utils::source_file_name(path, path));
+                Some(rows)
+            }
             Err(e) => {
                 log_message(silent, &format!("  ⚠️ $MFT {}: {}", path.display(), e));
                 Some(Vec::new())
@@ -207,7 +215,11 @@ pub fn process_ntfs_file(path: &Path, header: &[u8], silent: bool) -> Option<Vec
     if is_usn_name(&name) {
         let dirs = HashMap::new();
         return match usn::parse_usn_file(path, &computer, &dirs) {
-            Ok(res) => Some(res.events),
+            Ok(res) => {
+                let mut rows = res.events;
+                crate::utils::stamp_source_file(&mut rows, &crate::utils::source_file_name(path, path));
+                Some(rows)
+            }
             Err(e) => {
                 log_message(silent, &format!("  ⚠️ $UsnJrnl {}: {}", path.display(), e));
                 Some(Vec::new())

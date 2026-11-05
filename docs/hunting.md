@@ -8,7 +8,7 @@
 - `hunt_score` adds up the measured rarity of every rule that fired (a rule measured below 10 points is noise: no state, no points, its clause only), capped at 100.
 - `hunt_why` names each rule with its level, strongest first, then the lineage: `rule PATH-WINDOWS-ROOT (medium): duKhLYUX.exe ran from the root of C:\Windows [T1036.005]; rule NAM-RANDOM (low): duKhLYUX.exe has a generated-looking name (random letters) [T1036]; lineage: duKhLYUX.exe`.
 
-The ten event columns do not change, and `verdict` / `notes`, the analyst's columns, are never written.
+The fourteen event columns do not change, and `verdict` / `notes`, the analyst's columns, are never written.
 
 ```bash
 caarea -f workstation.E01 -o workstation.csv --hunt

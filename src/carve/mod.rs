@@ -390,6 +390,7 @@ pub fn carve_source(
                     if let Some(ts) = filetime_to_iso(ft) {
                         orphan_count += 1;
                         block_events.push(Event {
+                            source_file: String::new(),
                             timestamp: ts,
                             computer: computer.to_string(),
                             artifact: tag(base + pos as u64).apply("evtx:orphan_record"),
@@ -427,6 +428,11 @@ pub fn carve_source(
     pb.finish_and_clear();
 
     events.extend(block_events);
+    for e in events.iter_mut() {
+        if e.source_file.is_empty() {
+            e.source_file = source_name.to_string();
+        }
+    }
     stats.orphan_records = orphan_count;
     stats.usn_records = usn_count;
     stats.pacct = pacct_count;

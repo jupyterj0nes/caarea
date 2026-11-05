@@ -167,6 +167,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Result<Vec<Event>, String> {
             details.push_str(&format!(" account {}", account));
         }
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer.to_string(),
             artifact: artifact.to_string(),

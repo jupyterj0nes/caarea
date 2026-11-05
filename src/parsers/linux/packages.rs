@@ -36,6 +36,7 @@ pub fn parse_rpm_query_file(file_path: &Path, computer_name: &str) -> Vec<Event>
                 };
 
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: iso_ts,
                     computer: computer_name.to_string(),
                     artifact: "linux:package:rpm".to_string(),
@@ -87,6 +88,7 @@ pub fn parse_dpkg_log(file_path: &Path, computer_name: &str, tz: &HostTimezone) 
                 };
 
                 events.push(Event {
+                    source_file: String::new(),
                     timestamp: iso_ts,
                     computer: computer_name.to_string(),
                     artifact: "linux:package:dpkg".to_string(),
@@ -136,6 +138,7 @@ pub fn parse_apt_history(file_path: &Path, computer_name: &str, tz: &HostTimezon
         }
         let who = if user.is_empty() { "root".to_string() } else { user.split_whitespace().next().unwrap_or("root").to_string() };
         events.push(Event {
+            source_file: String::new(),
             timestamp: iso_utc(&tz.local_to_utc(start)),
             computer: computer_name.to_string(),
             artifact: "linux:package:apt".to_string(),
@@ -171,6 +174,7 @@ pub fn parse_pacman_log(file_path: &Path, computer_name: &str) -> Vec<Event> {
             continue;
         };
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer_name.to_string(),
             artifact: artifact.to_string(),
@@ -219,6 +223,7 @@ pub fn parse_rpm_log(file_path: &Path, computer_name: &str, tz: &HostTimezone) -
         };
         let Some(ts) = ts else { continue };
         events.push(Event {
+            source_file: String::new(),
             timestamp: ts,
             computer: computer_name.to_string(),
             artifact: format!("linux:package:rpm:{}", verb.to_ascii_lowercase()),
@@ -247,6 +252,7 @@ pub fn parse_zypp_history(file_path: &Path, computer_name: &str, tz: &HostTimezo
         let Ok(ndt) = NaiveDateTime::parse_from_str(parts[0], "%Y-%m-%d %H:%M:%S") else { continue };
         let cmd = parts[3].replace('\'', "");
         events.push(Event {
+            source_file: String::new(),
             timestamp: iso_utc(&tz.local_to_utc(ndt)),
             computer: computer_name.to_string(),
             artifact: "linux:package:zypper".to_string(),

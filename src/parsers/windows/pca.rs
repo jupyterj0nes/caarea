@@ -62,6 +62,7 @@ pub fn parse_text(text: &str, source: &str, computer: &str) -> Vec<Event> {
             (ts, parts[2].to_string(), d)
         };
         events.push(Event {
+            source_file: String::new(),
             timestamp,
             computer: computer.to_string(),
             artifact: if launch_dic { "pca:launch".to_string() } else { "pca:general".to_string() },

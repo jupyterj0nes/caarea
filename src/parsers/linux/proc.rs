@@ -61,6 +61,7 @@ pub fn parse_ps_lstart_file(file_path: &Path, computer_name: &str, tz: &HostTime
                 .to_string();
 
             events.push(Event {
+                source_file: String::new(),
                 timestamp: iso_timestamp,
                 computer: computer_name.to_string(),
                 artifact: "linux:process:ps_lstart".to_string(),

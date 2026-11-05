@@ -40,6 +40,7 @@ pub fn parse_text(text: &str, source: &str, computer: &str) -> Vec<Event> {
     let mut in_bm = false;
     let mut last_bm_image: Option<String> = None;
     let mk = |ts: String, artifact: &str, proc: String, pid: u32, details: String, user: String| Event {
+        source_file: String::new(),
         timestamp: ts,
         computer: computer.to_string(),
         artifact: artifact.to_string(),

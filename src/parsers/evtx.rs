@@ -35,7 +35,11 @@ pub struct Event {
     pub processname: String,
     pub commandline: Option<String>,
     pub parentprocessname: String,
-    /// Process metadata that the ten CSV columns do not carry (parent PID, GUIDs,
+    /// The file the row was read from, relative to the evidence it came in (`export/logs/Security.evtx`,
+    /// `partition_0_vss_0/Windows/System32/config/SYSTEM`), the container of a carved row, the file
+    /// name for a file given with `-f`. Stamped by the parser families, per file.
+    pub source_file: String,
+    /// Process metadata that the CSV columns do not carry (parent PID, GUIDs,
     /// integrity, hashes). Filled by the process-creation parsers, read by the hunt.
     pub meta: Option<Box<ProcMeta>>,
 }
@@ -121,6 +125,7 @@ pub fn process_evtx_target(target: &Path, silent: bool) -> Result<Vec<Event>, Bo
                 log_message(silent, &format!("Processing EVTX file: {}", file_path.display()));
                 let result = match parse_evtx(file) {
                     Ok(mut evtx_events) => {
+                        crate::utils::stamp_source_file(&mut evtx_events, &crate::utils::source_file_name(target, file_path));
                         evtx_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
                         print_evtx_statistics(file_path, &evtx_events, silent);
                         Some(evtx_events)
@@ -141,6 +146,7 @@ pub fn process_evtx_target(target: &Path, silent: bool) -> Result<Vec<Event>, Bo
     } else if target.is_file() {
         log_message(silent, &format!("Processing EVTX file: {}", target.display()));
         let mut evtx_events = parse_evtx(&target.to_string_lossy())?;
+        crate::utils::stamp_source_file(&mut evtx_events, &crate::utils::source_file_name(target, target));
         evtx_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
         print_evtx_statistics(target, &evtx_events, silent);
         all_events.extend(evtx_events);
@@ -898,6 +904,7 @@ pub fn extract_event(json_str: &str) -> Option<Event> {
     }
 
     Some(Event {
+        source_file: String::new(),
         timestamp,
         computer,
         artifact,

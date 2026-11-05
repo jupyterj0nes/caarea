@@ -159,6 +159,7 @@ pub fn events_for(pf: &Prefetch, source_name: &str, computer: &str) -> Vec<Event
         .iter()
         .enumerate()
         .map(|(i, ts)| Event {
+            source_file: String::new(),
             timestamp: ts.clone(),
             computer: computer.to_string(),
             artifact: "prefetch".to_string(),
