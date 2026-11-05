@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="318" viewBox="0 0 1100 318" role="img" aria-label="Three rows of a CAAREA timeline after --hunt, with hunt, hunt_score and hunt_why filled">
+  <defs>
+    <style>
+      .mono { font-family: 'Cascadia Mono', 'Cascadia Code', Consolas, Menlo, 'DejaVu Sans Mono', monospace; font-size: 12px; }
+      .hdr { fill: #7d8ba6; font-size: 11.5px; letter-spacing: 0.5px; }
+      .ts { fill: #8fa0bf; }
+      .proc { fill: #e6ecf7; }
+      .parent { fill: #8fa0bf; }
+      .note { fill: #5f6d8a; font-style: italic; }
+      .score { fill: #ffffff; font-weight: 700; }
+      .why { fill: #9fb0cc; }
+      .rule { fill: #ffb347; font-weight: 700; }
+      .lvl { fill: #ff8a4c; }
+      .mitre { fill: #7aa2f7; }
+      .lineage { fill: #8fa0bf; font-style: italic; }
+      .chip { fill: #ffb347; }
+      .chiptext { fill: #1a1206; font-weight: 700; font-size: 11.5px; }
+    </style>
+  </defs>
+  <rect width="1100" height="318" rx="12" fill="#0d1117"/>
+  <rect x="0.5" y="0.5" width="1099" height="317" rx="12" fill="none" stroke="#1f2a44"/>
+
+  <!-- header -->
+  <g class="mono hdr">
+    <text x="24" y="30">timestamp</text>
+    <text x="250" y="30">hunt</text>
+    <text x="345" y="30">hunt_score</text>
+    <text x="440" y="30">processname</text>
+    <text x="740" y="30">parentprocessname</text>
+  </g>
+  <path d="M24 40 H1076" stroke="#1f2a44"/>
+
+  <!-- row 1: PsExec dropper -->
+  <g class="mono">
+    <text x="24" y="68" class="ts">2016-09-21T03:41:02.560546Z</text>
+    <rect x="246" y="54" width="78" height="20" rx="10" class="chip"/>
+    <text x="285" y="68" text-anchor="middle" class="chiptext">candidate</text>
+    <text x="372" y="68" class="score">72</text>
+    <text x="440" y="68" class="proc">C:\Windows\duKhLYUX.exe</text>
+    <text x="740" y="68" class="note">(a Windows 7 4688: no parent name)</text>
+    <text x="24" y="90" class="why"><tspan class="rule">rule PATH-WINDOWS-ROOT</tspan> <tspan class="lvl">(medium)</tspan>: duKhLYUX.exe ran from the root of C:\Windows <tspan class="mitre">[T1036.005]</tspan>;</text>
+    <text x="24" y="108" class="why"><tspan class="rule">rule NAM-RANDOM</tspan> <tspan class="lvl">(low)</tspan>: duKhLYUX.exe has a generated-looking name (random letters) <tspan class="mitre">[T1036]</tspan>; <tspan class="lineage">lineage: duKhLYUX.exe</tspan></text>
+  </g>
+  <path d="M24 124 H1076" stroke="#161d2e"/>
+
+  <!-- row 2: installer from an archive's temp folder -->
+  <g class="mono">
+    <text x="24" y="152" class="ts">2016-08-30T17:31:55.224609Z</text>
+    <rect x="246" y="138" width="78" height="20" rx="10" class="chip"/>
+    <text x="285" y="152" text-anchor="middle" class="chiptext">candidate</text>
+    <text x="372" y="152" class="score">72</text>
+    <text x="440" y="152" class="proc">C:\Users\IEUser\AppData\Local\Temp\7zS3C5A.tmp\setup.exe</text>
+    <text x="24" y="174" class="parent">C:\Users\IEUser\Downloads\Thunderbird Setup 45.2.0.exe (PID: 4176)</text>
+    <text x="24" y="196" class="why"><tspan class="rule">rule PATH-ARCHIVE-TEMP</tspan> <tspan class="lvl">(medium)</tspan>: setup.exe ran from the temporary extraction of an archive <tspan class="mitre">[T1204.002]</tspan>;</text>
+    <text x="24" y="214" class="why"><tspan class="rule">rule PATH-SCRATCH</tspan> <tspan class="lvl">(low)</tspan>: setup.exe ran from Temp <tspan class="mitre">[T1036]</tspan>;</text>
+    <text x="24" y="232" class="why"><tspan class="lineage">lineage: userinit.exe &gt; explorer.exe &gt; chrome.exe &gt; Thunderbird Setup 45.2.0.exe &gt; setup.exe</tspan></text>
+  </g>
+  <path d="M24 248 H1076" stroke="#161d2e"/>
+
+  <!-- row 3: a browser launching an installer -->
+  <g class="mono">
+    <text x="24" y="276" class="ts">2016-08-30T15:21:31.129882Z</text>
+    <rect x="246" y="262" width="78" height="20" rx="10" class="chip"/>
+    <text x="285" y="276" text-anchor="middle" class="chiptext">candidate</text>
+    <text x="372" y="276" class="score">39</text>
+    <text x="440" y="276" class="proc">C:\Windows\System32\msiexec.exe</text>
+    <text x="740" y="276" class="parent">…\Application\chrome.exe (PID: 4092)</text>
+    <text x="24" y="298" class="why"><tspan class="rule">rule GEN-BROWSER-SHELL</tspan> <tspan class="lvl">(medium)</tspan>: chrome.exe launched msiexec.exe <tspan class="mitre">[T1189]</tspan>; <tspan class="lineage">lineage: userinit.exe &gt; explorer.exe &gt; chrome.exe &gt; msiexec.exe</tspan></text>
+  </g>
+</svg>

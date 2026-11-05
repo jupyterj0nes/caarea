@@ -339,7 +339,7 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
 
 - **H0 (done, 0.5 d)**: internal process fields, process tree per host (PID + time, GUID
   when Sysmon), exits close the interval, `ancestors`, `lineage`, `resolve_parents`.
-- **H1 (done, 1 d)**: genealogy rules, see README table.
+- **H1 (done, 1 d)**: genealogy rules, see the rule table in docs/hunting.md.
 - **H1b (done, 0.5 d)**: the timeline carries masstin's analysis tail (15 columns; empty
   tail written bare); `verdict` and `notes` are the analyst's. The findings table opens
   with `rank, significant, p_value, q_value` and closes with `why_unusual, evidence` like
@@ -352,7 +352,7 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   .NET) listed with their folders. Rules: `NAM-SYSTEM-PATH`, `NAM-FAKE-KERNEL`,
   `NAM-LOOKALIKE` (homoglyph anywhere, one edit away outside the system folders),
   `NAM-DOUBLE-EXT`, `NAM-RTLO`, `NAM-PADDED`, `NAM-RANDOM`, `PATH-WINDOWS-ROOT`,
-  `PATH-SCRATCH`, `PATH-ARCHIVE-TEMP`, `PATH-ADS`, `PATH-REMOTE`; see the README table.
+  `PATH-SCRATCH`, `PATH-ARCHIVE-TEMP`, `PATH-ADS`, `PATH-REMOTE`; see the rule table in docs/hunting.md.
   Found while validating on DeepBlueCLI's EVTX set (8 hosts, Windows 7 without 4689, logs
   spanning years): the PID-only parent resolution handed a service's PID to whatever held
   it before a reboot (179 false `GEN-CORE-PARENT`). Fixed by boot markers in the process
