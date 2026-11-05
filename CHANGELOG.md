@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 (2026-11-05)
 
 ### The hunt closes with the rows that deserve reading first
 
