@@ -151,7 +151,6 @@ pub fn parse_lnk(path: &Path, computer: &str) -> Vec<Event> {
     if mtime.is_empty() {
         return Vec::new();
     }
-    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let (target, details) = describe(&link);
     if target.is_empty() {
         return Vec::new();
