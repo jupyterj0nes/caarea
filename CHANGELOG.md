@@ -8,7 +8,7 @@
 
 ### A README to read in two minutes, the detail in `docs/`
 
-- The README opens with the logo (`resources/caarea_logo.png`), a recording of `caarea --hunt` over the public DeepBlueCLI set (`resources/demo-hunt.gif`, made with vhs) and a figure of three judged rows (`resources/hunt-rows.svg`), then says what the tool does, how to start, what comes out, what it reads and how it hunts, each in a screenful with a link to its page.
+- The README opens with the logo (`resources/caarea_logo.png`: the carea leonés, the herding dog of León the tool is named after, drawn as a process tree), a recording of `caarea --hunt` over the public DeepBlueCLI set (`resources/demo-hunt.gif`, made with vhs) and a figure of three judged rows (`resources/hunt-rows.svg`), then says what the tool does, how to start, what comes out, what it reads and how it hunts, each in a screenful with a link to its page.
 - The reference moved to `docs/`: `sources.md` (every source with event ids, keys and notes), `csv-format.md` (the fifteen columns and the tail, with a judged row), `hunting.md` (tail semantics, findings table, rule catalogue, process tree, the measurement of `hunt_score`, the clean reference), `carving.md`, `time-zones.md`, `cli.md`. Nothing was dropped; the text is the README's, with the paragraphs that had grown together split by topic. The example row of the dropper now reads as CAAREA writes it today (PID 3744, no parent name: a Windows 7 4688 whose creator is not in the log).
 
 ### What a clean host executes is vouched for

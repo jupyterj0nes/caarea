@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="resources/caarea_logo.png" alt="CAAREA: a carea leonés and the mountains of León drawn as a process tree, nodes and edges, one execution lit; the name below" width="560"/>
+  <img src="resources/caarea_logo.png" alt="CAAREA: a carea leonés drawn as a process tree, the lines running left to right through the dog and on, one lineage in green; the name below" width="680"/>
   <br><br>
   <strong>One command. Every program execution on a machine, in order, in a CSV.</strong>
   <br>
@@ -127,4 +127,4 @@ CAAREA is one of four Rust tools that write the same kind of timeline and close 
 
 ## About
 
-CAAREA stands for *Chronological Artifacts & Activity Reconstruction Engine for Analysis*. It builds on stable Rust with a plain `cargo build --release` and ships as one static binary for Windows, Linux and macOS. Internal DFIR research tool by [jupyterj0nes](https://github.com/jupyterj0nes); issues and pull requests are welcome.
+CAAREA stands for *Chronological Artifacts & Activity Reconstruction Engine for Analysis*, and is named after the [carea leonés](https://en.wikipedia.org/wiki/Carea_Leon%C3%A9s), the herding dog of León, the way masstin is named after the mastín. It builds on stable Rust with a plain `cargo build --release` and ships as one static binary for Windows, Linux and macOS. Internal DFIR research tool by [jupyterj0nes](https://github.com/jupyterj0nes); issues and pull requests are welcome.
