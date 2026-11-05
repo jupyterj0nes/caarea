@@ -85,11 +85,6 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
             details.push_str(" | fatal");
         }
     }
-    let folder = path
-        .parent()
-        .and_then(|p| p.file_name())
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
     vec![Event {
         source_file: String::new(),
         timestamp,
@@ -101,7 +96,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
         target_username: String::new(),
         processname,
         commandline: Some(details),
-        parentprocessname: folder,
+        parentprocessname: "WerFault.exe".to_string(),
         meta: None,
     }]
 }
@@ -125,7 +120,7 @@ mod tests {
         assert_eq!(rows[0].pid, 0x1658);
         assert_eq!(rows[0].timestamp, "2026-10-28T20:22:38.065458Z");
         assert_eq!(rows[0].commandline.as_deref(), Some("WER CLR20r3: powershell.exe | 10.0.17763.1 | fatal"));
-        assert_eq!(rows[0].parentprocessname, "AppCrash_powershell.exe_abc");
+        assert_eq!(rows[0].parentprocessname, "WerFault.exe");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

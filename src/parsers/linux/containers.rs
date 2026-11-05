@@ -43,7 +43,7 @@ fn time(v: &str) -> Option<String> {
     parse_flexible_time(v).map(|dt| iso_utc(&dt))
 }
 
-fn docker(v: &Value, computer: &str, source: &str) -> Vec<Event> {
+fn docker(v: &Value, computer: &str, _source: &str) -> Vec<Event> {
     let name = s(v, &["Name"]).trim_start_matches('/').to_string();
     let id = s(v, &["ID"]);
     let short = id.chars().take(12).collect::<String>();
@@ -73,7 +73,7 @@ fn docker(v: &Value, computer: &str, source: &str) -> Vec<Event> {
             cmd,
             if entrypoint.is_empty() { String::new() } else { format!(" entrypoint {}", entrypoint) }
         )),
-        parentprocessname: format!("dockerd [{}]", source),
+        parentprocessname: "dockerd".to_string(),
         meta: None,
     };
     let mut out = Vec::new();
@@ -89,7 +89,7 @@ fn docker(v: &Value, computer: &str, source: &str) -> Vec<Event> {
     out
 }
 
-fn containerd(v: &Value, computer: &str, source: &str, path: &Path) -> Vec<Event> {
+fn containerd(v: &Value, computer: &str, _source: &str, path: &Path) -> Vec<Event> {
     // OCI runtime spec: process.args, process.user.uid, annotations with image / names
     let args = join_array(&v["process"]["args"]);
     let uid = v["process"]["user"]["uid"].as_u64().map(|u| u.to_string()).unwrap_or_default();
@@ -110,12 +110,12 @@ fn containerd(v: &Value, computer: &str, source: &str, path: &Path) -> Vec<Event
         target_username: String::new(),
         processname: args.split_whitespace().next().unwrap_or("").to_string(),
         commandline: Some(format!("containerd task {}{}: image {} args {} (config time)", cname, if pod.is_empty() { String::new() } else { format!(" in pod {}", pod) }, image, args)),
-        parentprocessname: format!("containerd [{}]", source),
+        parentprocessname: "containerd".to_string(),
         meta: None,
     }]
 }
 
-fn podman(v: &Value, computer: &str, source: &str) -> Vec<Event> {
+fn podman(v: &Value, computer: &str, _source: &str) -> Vec<Event> {
     let mut out = Vec::new();
     if let Some(list) = v.as_array() {
         for c in list {
@@ -134,7 +134,7 @@ fn podman(v: &Value, computer: &str, source: &str) -> Vec<Event> {
                     target_username: String::new(),
                     processname: names.split_whitespace().next().unwrap_or(&id).to_string(),
                     commandline: Some(format!("Podman container created {} ({}): image {}", names, id, image)),
-                    parentprocessname: format!("podman [{}]", source),
+                    parentprocessname: "podman".to_string(),
                     meta: None,
                 });
             }

@@ -33,6 +33,8 @@ vshadow = "0.2"
 regex = "1.10"
 blockcarve = "0.1.2"
 rusqlite = { version = "0.32", features = ["bundled"] }
+rust-fs-xfs = { version = "0.14", default-features = false }
+rust-fs-core = { version = "0.3", default-features = false }
 
 [profile.release]
 opt-level = 3

@@ -34,7 +34,7 @@ fn split_time(line: &str) -> Option<(String, &str)> {
     Some((normalize_iso(ts)?, rest.trim()))
 }
 
-pub fn parse_text(text: &str, source: &str, computer: &str) -> Vec<Event> {
+pub fn parse_text(text: &str, _source: &str, computer: &str) -> Vec<Event> {
     let mut events = Vec::new();
     let mut last_time: Option<String> = None;
     let mut in_bm = false;
@@ -50,7 +50,7 @@ pub fn parse_text(text: &str, source: &str, computer: &str) -> Vec<Event> {
         target_username: String::new(),
         processname: proc,
         commandline: Some(details),
-        parentprocessname: source.to_string(),
+        parentprocessname: "MsMpEng.exe".to_string(),
         meta: None,
     };
     for raw in text.lines() {

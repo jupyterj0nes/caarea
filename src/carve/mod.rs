@@ -328,7 +328,7 @@ pub fn carve_source(
                         let name = format!("{}-carved.pf", pf.executable);
                         events.extend(prefetch::events_for(&pf, &name, computer).into_iter().map(|mut e| {
                             e.artifact = prov.apply(&e.artifact);
-                            e.parentprocessname = format!("{} [{}]", name, source_name);
+                            e.source_file = format!("{} [{}]", name, source_name);
                             e
                         }));
                         HitAction::SkipTo(offset + 512)
@@ -372,7 +372,7 @@ pub fn carve_source(
                 if b.len() >= 384 && (utmp_le || utmp_be) {
                     if let Some(mut e) = linux::utmp_event(b, computer) {
                         e.artifact = tag(base + pos as u64).apply(&e.artifact);
-                        e.parentprocessname = source_name.clone();
+                        e.source_file = source_name.clone();
                         block_events.push(e);
                         utmp_count += 1;
                         pos += 384;
@@ -390,7 +390,7 @@ pub fn carve_source(
                     if let Some(ts) = filetime_to_iso(ft) {
                         orphan_count += 1;
                         block_events.push(Event {
-                            source_file: String::new(),
+                            source_file: source_name.clone(),
                             timestamp: ts,
                             computer: computer.to_string(),
                             artifact: tag(base + pos as u64).apply("evtx:orphan_record"),
@@ -400,7 +400,7 @@ pub fn carve_source(
                             target_username: String::new(),
                             processname: "orphan EVTX record".to_string(),
                             commandline: Some(format!("Event record {} ({} bytes) outside any chunk: content not renderable, the log it belonged to was cleared or deleted", id, size)),
-                            parentprocessname: source_name.clone(),
+                            parentprocessname: String::new(),
                             meta: None,
                         });
                         pos += (size as usize).max(8) & !7;

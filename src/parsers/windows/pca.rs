@@ -72,7 +72,7 @@ pub fn parse_text(text: &str, source: &str, computer: &str) -> Vec<Event> {
             target_username: String::new(),
             processname: path,
             commandline: Some(details),
-            parentprocessname: source.to_string(),
+            parentprocessname: "PcaSvc".to_string(),
             meta: None,
         });
     }

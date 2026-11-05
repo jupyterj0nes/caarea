@@ -192,7 +192,7 @@ pub fn parse_registry_file_with_defaults(
                         target_username: user,
                         processname: entry.program.clone(),
                         commandline: Some(format!("Key: {}", entry.key)),
-                        parentprocessname: "N/A".to_string(),
+                        parentprocessname: String::new(),
                         meta: None,
                     });
                 }
@@ -225,7 +225,7 @@ pub fn parse_registry_file_with_defaults(
                                     target_username: "N/A".to_string(),
                                     processname: entry.path.clone(),
                                     commandline: Some(format!("Position: {}, {}", entry.position, exec_str)),
-                                    parentprocessname: "N/A".to_string(),
+                                    parentprocessname: String::new(),
                                     meta: None,
                                 });
                             }
@@ -690,7 +690,7 @@ pub fn parse_registry_file_with_defaults(
                     target_username: "N/A".to_string(),
                     processname: entry.value.clone(),
                     commandline: Some(format!("Key: {}, Data: {}", entry.key, entry.data)),
-                    parentprocessname: "N/A".to_string(),
+                    parentprocessname: String::new(),
                     meta: None,
                 });
             }
@@ -767,7 +767,7 @@ pub fn parse_registry_file_with_defaults(
                     target_username: "N/A".to_string(),
                     processname: path_str.to_string(),
                     commandline: Some(format!("SHA1: {}, Class: {}", sha1_str, entry.class.name())),
-                    parentprocessname: "Amcache.hve".to_string(),
+                    parentprocessname: String::new(),
                     meta: None,
                 });
             }

@@ -53,7 +53,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
 }
 
 /// One row for a 384-byte record; `None` for types that are not sessions or for empty ones.
-pub fn record_event(rec: &[u8], big: bool, failed_log: bool, computer: &str, source: &str) -> Option<Event> {
+pub fn record_event(rec: &[u8], big: bool, failed_log: bool, computer: &str, _source: &str) -> Option<Event> {
     let ut_type = i32_at(rec, 0, big);
     let pid = i32_at(rec, 4, big).max(0) as u32;
     let line = cstr(&rec[8..40]);
@@ -95,7 +95,7 @@ pub fn record_event(rec: &[u8], big: bool, failed_log: bool, computer: &str, sou
         target_username: String::new(),
         processname: if line.is_empty() { "login".to_string() } else { line.clone() },
         commandline: Some(details),
-        parentprocessname: source.to_string(),
+        parentprocessname: String::new(),
         meta: None,
     })
 }

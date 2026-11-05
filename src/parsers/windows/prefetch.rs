@@ -147,7 +147,7 @@ pub fn parse(raw: &[u8]) -> Result<Prefetch, String> {
 }
 
 /// One timeline row per recorded run.
-pub fn events_for(pf: &Prefetch, source_name: &str, computer: &str) -> Vec<Event> {
+pub fn events_for(pf: &Prefetch, _source_name: &str, computer: &str) -> Vec<Event> {
     let exe_path = pf.executable_path().unwrap_or(&pf.executable).to_string();
     let volume = pf
         .volumes
@@ -176,7 +176,7 @@ pub fn events_for(pf: &Prefetch, source_name: &str, computer: &str) -> Vec<Event
                 pf.files.len(),
                 volume
             )),
-            parentprocessname: source_name.to_string(),
+            parentprocessname: String::new(),
             meta: None,
         })
         .collect()
@@ -254,7 +254,7 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].artifact, "prefetch");
         assert_eq!(rows[0].processname, "\\VOLUME{guid}\\TEMP\\CAAREA-TEST.EXE");
-        assert_eq!(rows[0].parentprocessname, "CAAREA-TEST.EXE-1234ABCD.pf");
+        assert!(rows[0].parentprocessname.is_empty(), "a Prefetch file names no parent; the .pf goes to source_file");
         assert!(rows[0].commandline.as_deref().unwrap().contains("run count 7"));
     }
 

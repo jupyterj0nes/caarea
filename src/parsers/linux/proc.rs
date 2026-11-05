@@ -71,7 +71,7 @@ pub fn parse_ps_lstart_file(file_path: &Path, computer_name: &str, tz: &HostTime
                 target_username: user,
                 processname: process_name,
                 commandline: Some(command),
-                parentprocessname: "N/A".to_string(),
+                parentprocessname: String::new(),
                 meta: None,
             });
         }

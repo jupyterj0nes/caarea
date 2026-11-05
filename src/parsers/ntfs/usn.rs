@@ -220,7 +220,7 @@ pub struct UsnResult {
 
 /// Parses a journal buffer. `dirs` maps directory record numbers to volume-relative paths
 /// (from the `$MFT` of the same volume) so historical names get their folder back.
-pub fn parse_buffer(data: &[u8], source: &str, computer: &str, dirs: &HashMap<u64, String>) -> UsnResult {
+pub fn parse_buffer(data: &[u8], _source: &str, computer: &str, dirs: &HashMap<u64, String>) -> UsnResult {
     let mut events = Vec::new();
     let mut records = 0usize;
     let mut prefetch_rows = 0usize;
@@ -267,7 +267,7 @@ pub fn parse_buffer(data: &[u8], source: &str, computer: &str, dirs: &HashMap<u6
             target_username: String::new(),
             processname: exe_for_pf.unwrap_or_else(|| full.clone()),
             commandline: Some(format!("{} | USN {} | MFT #{} | {}", description, decode_reason(rec.reason), rec.entry, full)),
-            parentprocessname: source.to_string(),
+            parentprocessname: String::new(),
             meta: None,
         });
     }

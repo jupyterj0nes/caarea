@@ -13,7 +13,7 @@ pub fn is_syscache_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("Syscache.hve")
 }
 
-pub fn events(hive: &Hive, computer: &str, source: &str) -> Vec<Event> {
+pub fn events(hive: &Hive, computer: &str, _source: &str) -> Vec<Event> {
     let mut events = Vec::new();
     let Ok(Some(table)) = hive.open(r"DefaultObjectStore\ObjectTable") else { return events };
     let Ok(objects) = table.subkeys() else { return events };
@@ -59,7 +59,7 @@ pub fn events(hive: &Hive, computer: &str, source: &str) -> Vec<Event> {
             target_username: String::new(),
             processname: format!("MFT entry {} ({})", entry, key.name),
             commandline: Some(details),
-            parentprocessname: source.to_string(),
+            parentprocessname: String::new(),
             meta: None,
         });
     }

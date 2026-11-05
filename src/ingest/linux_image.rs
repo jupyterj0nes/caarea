@@ -1,5 +1,6 @@
 //! Linux file systems inside disk images: ext2/3/4 partitions (MBR, GPT or a bare
-//! partition image) and ext4 logical volumes inside LVM2 physical volumes. The files the
+//! partition image), ext4 and XFS logical volumes inside LVM2 physical volumes, and XFS
+//! partitions through [`super::xfs_image`]. The files the
 //! Linux parsers know are copied out with their original paths (`etc/hostname`,
 //! `var/log/auth.log`, `home/<user>/.bash_history`, ...), so the extracted tree is handled
 //! exactly like a UAC collection, time-zone detection included.
@@ -21,9 +22,9 @@ const GPT_LINUX_LVM_GUID: [u8; 16] = [
     0x79, 0xD3, 0xD6, 0xE6, 0x07, 0xF5, 0xC2, 0x44, 0xA2, 0x3C, 0x23, 0x8F, 0x2A, 0x3D, 0xF9, 0x28,
 ];
 /// Files larger than this are not copied (journals and logs stay well below).
-const MAX_FILE_BYTES: u64 = 1 << 30;
+pub(crate) const MAX_FILE_BYTES: u64 = 1 << 30;
 /// Directory walk depth under the roots listed below.
-const MAX_DEPTH: usize = 6;
+pub(crate) const MAX_DEPTH: usize = 6;
 
 /// Does an ext2/3/4 superblock sit at `offset`?
 pub fn verify_ext4_superblock<R: Read + Seek>(reader: &mut R, offset: u64) -> bool {
@@ -34,14 +35,21 @@ pub fn verify_ext4_superblock<R: Read + Seek>(reader: &mut R, offset: u64) -> bo
     reader.read_exact(&mut magic).is_ok() && u16::from_le_bytes(magic) == EXT4_SUPER_MAGIC
 }
 
-/// Byte offsets of ext partitions (`ext4`) and of LVM physical volumes (`lvm`).
+/// Byte offsets of ext partitions (`ext4`), XFS partitions (`xfs`) and LVM physical volumes (`lvm`).
 pub struct LinuxPartitions {
     pub ext4: Vec<u64>,
+    pub xfs: Vec<u64>,
     pub lvm: Vec<u64>,
 }
 
+impl LinuxPartitions {
+    pub fn is_empty(&self) -> bool {
+        self.ext4.is_empty() && self.xfs.is_empty() && self.lvm.is_empty()
+    }
+}
+
 pub fn find_linux_partitions<R: Read + Seek>(reader: &mut R) -> LinuxPartitions {
-    let mut out = LinuxPartitions { ext4: Vec::new(), lvm: Vec::new() };
+    let mut out = LinuxPartitions { ext4: Vec::new(), xfs: Vec::new(), lvm: Vec::new() };
     if reader.seek(SeekFrom::Start(0)).is_err() {
         return out;
     }
@@ -70,6 +78,8 @@ pub fn find_linux_partitions<R: Read + Seek>(reader: &mut R) -> LinuxPartitions 
                             out.lvm.push(offset);
                         } else if verify_ext4_superblock(reader, offset) {
                             out.ext4.push(offset);
+                        } else if super::xfs_image::verify_xfs_superblock(reader, offset) {
+                            out.xfs.push(offset);
                         } else if guid == GPT_LINUX_FS_GUID {
                             // Linux data partition that is not ext: could still be an LVM PV
                             out.lvm.push(offset);
@@ -91,6 +101,8 @@ pub fn find_linux_partitions<R: Read + Seek>(reader: &mut R) -> LinuxPartitions 
                     0x83 | 0x93 | 0xFD => {
                         if verify_ext4_superblock(reader, offset) {
                             out.ext4.push(offset);
+                        } else if super::xfs_image::verify_xfs_superblock(reader, offset) {
+                            out.xfs.push(offset);
                         } else {
                             out.lvm.push(offset);
                         }
@@ -100,8 +112,12 @@ pub fn find_linux_partitions<R: Read + Seek>(reader: &mut R) -> LinuxPartitions 
             }
         }
     }
-    if out.ext4.is_empty() && out.lvm.is_empty() && verify_ext4_superblock(reader, 0) {
-        out.ext4.push(0);
+    if out.is_empty() {
+        if verify_ext4_superblock(reader, 0) {
+            out.ext4.push(0);
+        } else if super::xfs_image::verify_xfs_superblock(reader, 0) {
+            out.xfs.push(0);
+        }
     }
     out
 }
@@ -127,7 +143,7 @@ impl<R: Read + Seek> Ext4Read for BorrowedReader<R> {
 }
 
 /// Exact paths copied when present.
-const EXACT_FILES: &[&str] = &[
+pub(crate) const EXACT_FILES: &[&str] = &[
     "/etc/hostname",
     "/etc/timezone",
     "/etc/localtime",
@@ -155,7 +171,7 @@ const EXACT_FILES: &[&str] = &[
 ];
 
 /// Directories walked (depth-limited) with a name filter.
-const WALK_DIRS: &[&str] = &[
+pub(crate) const WALK_DIRS: &[&str] = &[
     "/var/log",
     "/var/account",
     "/var/log/account",
@@ -182,7 +198,7 @@ const WALK_DIRS: &[&str] = &[
 ];
 
 /// Should a file under one of `WALK_DIRS` be copied? Decided on the volume-relative path.
-fn wanted(path: &str, name: &str) -> bool {
+pub(crate) fn wanted(path: &str, name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let p = path.to_ascii_lowercase();
     // histories and editor state in any home
@@ -233,11 +249,11 @@ fn wanted(path: &str, name: &str) -> bool {
     false
 }
 
-fn dest_for(output_dir: &Path, linux_path: &str) -> PathBuf {
+pub(crate) fn dest_for(output_dir: &Path, linux_path: &str) -> PathBuf {
     output_dir.join(linux_path.trim_start_matches('/'))
 }
 
-fn write_file(dest: &Path, data: &[u8]) -> bool {
+pub(crate) fn write_file(dest: &Path, data: &[u8]) -> bool {
     if let Some(parent) = dest.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -308,8 +324,8 @@ pub fn extract_partition<R: Read + Seek + 'static>(reader: &mut R, offset: u64, 
     Ok(count)
 }
 
-/// ext4 logical volumes inside an LVM2 physical volume at `offset`: each one is dumped to a
-/// temporary raw file and extracted like a partition. Returns `(volumes found, files)`.
+/// ext4 and XFS logical volumes inside an LVM2 physical volume at `offset`: each one is dumped
+/// to a temporary raw file and extracted like a partition. Returns `(volumes found, files)`.
 pub fn extract_lvm<R: Read + Seek>(reader: &mut R, offset: u64, output_dir: &Path, staging: &Path) -> (usize, usize) {
     struct Off<'a, R: Read + Seek> {
         inner: &'a mut R,
@@ -343,7 +359,9 @@ pub fn extract_lvm<R: Read + Seek>(reader: &mut R, offset: u64, output_dir: &Pat
         let Some(lv) = lvm.lvs().find(|l| l.name() == name.as_str()) else { continue };
         let mut olv = lvm.open_lv(lv, &mut pv);
         let mut magic = [0u8; 2];
-        if olv.seek(SeekFrom::Start(0x438)).is_err() || olv.read_exact(&mut magic).is_err() || u16::from_le_bytes(magic) != EXT4_SUPER_MAGIC {
+        let is_ext = olv.seek(SeekFrom::Start(0x438)).is_ok() && olv.read_exact(&mut magic).is_ok() && u16::from_le_bytes(magic) == EXT4_SUPER_MAGIC;
+        let is_xfs = !is_ext && super::xfs_image::verify_xfs_superblock(&mut olv, 0);
+        if !is_ext && !is_xfs {
             continue;
         }
         volumes += 1;
@@ -363,7 +381,9 @@ pub fn extract_lvm<R: Read + Seek>(reader: &mut R, offset: u64, output_dir: &Pat
         })();
         if dumped.is_ok() {
             if let Ok(mut f) = File::open(&tmp) {
-                if let Ok(n) = extract_partition(&mut f, 0, &output_dir.join(format!("lv_{}", name.replace(['/', '\\'], "_")))) {
+                let dir = output_dir.join(format!("lv_{}", name.replace(['/', '\\'], "_")));
+                let extracted = if is_xfs { super::xfs_image::extract_partition(&mut f, 0, &dir) } else { extract_partition(&mut f, 0, &dir) };
+                if let Ok(n) = extracted {
                     files += n;
                 }
             }
@@ -399,5 +419,11 @@ mod tests {
         let p = find_linux_partitions(&mut c);
         assert_eq!(p.ext4, vec![0]);
         assert!(p.lvm.is_empty());
+        let mut img = vec![0u8; 4096];
+        img[..4].copy_from_slice(b"XFSB");
+        let mut c = std::io::Cursor::new(img);
+        let p = find_linux_partitions(&mut c);
+        assert_eq!(p.xfs, vec![0]);
+        assert!(p.ext4.is_empty() && p.lvm.is_empty());
     }
 }

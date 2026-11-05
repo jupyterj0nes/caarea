@@ -307,7 +307,7 @@ fn is_interesting(path_lower: &str, name_lower: &str) -> bool {
 
 /// Rows for one `FILE` record on its own (carved from raw bytes): no parent resolution, so
 /// the folder is unknown and only names that are strong on their own are reported.
-pub fn standalone_record_events(raw: &[u8], computer: &str, source: &str) -> Vec<Event> {
+pub fn standalone_record_events(raw: &[u8], computer: &str, _source: &str) -> Vec<Event> {
     let Ok(entry) = MftEntry::from_buffer(raw.to_vec(), 0) else { return Vec::new() };
     if entry.header.base_reference.entry != 0 || entry.is_dir() {
         return Vec::new();
@@ -346,7 +346,7 @@ pub fn standalone_record_events(raw: &[u8], computer: &str, source: &str) -> Vec
                 target_username: String::new(),
                 processname: full.clone(),
                 commandline: Some(format!("File {} (record carved): {}", kind, notes.join("; "))),
-                parentprocessname: source.to_string(),
+                parentprocessname: String::new(),
                 meta: None,
             });
         }
@@ -372,7 +372,6 @@ pub fn parse_mft_file(path: &Path, computer: &str) -> Result<MftResult, String> 
     let mut skipping = SkipReader { inner: reader, skip: skip_bytes };
     skipping.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
     let mut parser = MftParser::from_read_seek(skipping, Some(remaining)).map_err(|e| format!("cannot open $MFT: {}", e))?;
-    let source = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "$MFT".to_string());
 
     let count = parser.get_entry_count();
     let mut resolver = PathResolver::new(skipped);
@@ -455,7 +454,7 @@ pub fn parse_mft_file(path: &Path, computer: &str) -> Result<MftResult, String> 
                     if allocated { "" } else { " (record freed, file deleted)" },
                     notes.join("; ")
                 )),
-                parentprocessname: source.clone(),
+                parentprocessname: String::new(),
                 meta: None,
             });
         };

@@ -314,6 +314,8 @@ dependencies = [
  "rayon",
  "regex",
  "rusqlite",
+ "rust-fs-core",
+ "rust-fs-xfs",
  "serde_json",
  "sootmark-ese",
  "sootmark-registry",
@@ -542,6 +544,15 @@ name = "crc-catalog"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
+
+[[package]]
+name = "crc32c"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f132a176423ee852e8f0a35d43088d1850966b50745be818a88b76f64b1c6cb"
+dependencies = [
+ "rustc_version",
+]
 
 [[package]]
 name = "crc32fast"
@@ -1910,6 +1921,22 @@ dependencies = [
  "hashlink",
  "libsqlite3-sys",
  "smallvec",
+]
+
+[[package]]
+name = "rust-fs-core"
+version = "0.3.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c73c72ed61d0d97993e46d1e4e5df6cd6c21a4dc05085e3eb5887766e0a8e7fa"
+
+[[package]]
+name = "rust-fs-xfs"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecb06cb02c57e1e295f2d9dbf7cacf7557c78e0c453de3ffe7c89e4bcd9fd6c5"
+dependencies = [
+ "crc32c",
+ "rust-fs-core",
 ]
 
 [[package]]

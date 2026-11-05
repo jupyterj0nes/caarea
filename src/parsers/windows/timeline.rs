@@ -177,7 +177,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Result<Vec<Event>, String> {
             target_username: String::new(),
             processname: row.app,
             commandline: Some(details),
-            parentprocessname: "ActivitiesCache.db".to_string(),
+            parentprocessname: String::new(),
             meta: None,
         });
     }

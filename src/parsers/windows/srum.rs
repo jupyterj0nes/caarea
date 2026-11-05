@@ -75,7 +75,6 @@ pub fn parse_file(path: &Path, computer: &str) -> Result<SrumResult, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let db = Database::open(&bytes).map_err(|e| format!("not an ESE database: {}", e))?;
     let mut problems = db.problems.len();
-    let source = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     if std::env::var_os("CAAREA_DEBUG_SRUM").is_some() {
         for t in &db.tables {
             let n = db.rows(&t.name).map(|r| r.count()).unwrap_or(0);
@@ -112,7 +111,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Result<SrumResult, String> {
         target_username: String::new(),
         processname: app,
         commandline: Some(details),
-        parentprocessname: source.clone(),
+        parentprocessname: String::new(),
         meta: None,
     };
 

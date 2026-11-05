@@ -113,7 +113,7 @@ fn classify_key(dk: &DeletedKey) -> Option<(&'static str, String, String)> {
 }
 
 /// Rows for one hive. `user` and `computer` are the ones the live parse decided.
-pub fn events_for_hive(bytes: &[u8], computer: &str, user: &str, source: &str) -> (Vec<Event>, usize, usize) {
+pub fn events_for_hive(bytes: &[u8], computer: &str, user: &str, _source: &str) -> (Vec<Event>, usize, usize) {
     let Some(image) = HiveImage::new(bytes) else { return (Vec::new(), 0, 0) };
     let scan = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| image.scan())) {
         Ok(s) => s,
@@ -133,7 +133,7 @@ pub fn events_for_hive(bytes: &[u8], computer: &str, user: &str, source: &str) -
         target_username: user,
         processname: proc,
         commandline: Some(details),
-        parentprocessname: source.to_string(),
+        parentprocessname: String::new(),
         meta: None,
     };
 

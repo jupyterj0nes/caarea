@@ -75,7 +75,7 @@ timestamp,computer,artifact,event_id,state,target_username,reserved_1,processnam
 | **Registry** | BAM/DAM, ShimCache, services, Run keys, TaskCache, IFEO / Winlogon / AppInit, UserAssist, RunMRU, RecentDocs, MUICache, FeatureUsage, CapabilityAccessManager, Office TrustRecords; dirty hives repaired from their logs, freed cells included |
 | **NTFS** | `$MFT` (binaries and scripts written outside the system folders, resident script content quoted, freed records) and `$UsnJrnl:$J` (every Prefetch rewrite, drops, renames, deletions, log truncation) |
 | **Linux** | `pacct`, `audit.log`, the binary systemd journal, `auth.log` / `secure` / `syslog` / `cron`, shell and REPL histories, `dpkg` / `apt` / `dnf` / `pacman` / `zypper`, cron and systemd units and timers, `wtmp` / `btmp`, Docker / containerd / podman, cloud-init, web server access logs, UAC process listings |
-| **Containers of all that** | E01 / Ex01, raw, VMDK, VHD / VHDX, live volumes, **every Volume Shadow Copy**, ext2/3/4 and LVM2 partitions, KAPE / Velociraptor / UAC / Cortex XDR / CyLR packages, zips and tarballs nested five deep |
+| **Containers of all that** | E01 / Ex01, raw, VMDK, VHD / VHDX, live volumes, **every Volume Shadow Copy**, ext2/3/4 and XFS partitions, plain or inside LVM2, KAPE / Velociraptor / UAC / Cortex XDR / CyLR packages, zips and tarballs nested five deep |
 
 Event ids, keys and the notes on each source: [What it reads →](docs/sources.md)
 
@@ -105,7 +105,7 @@ The rules only state what a documented source states: the expected-parent and al
 
 ## How it is tested
 
-`cargo test` runs 153 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
+`cargo test` runs 156 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
 
 - 524 public EVTX samples ([EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES), [EVTX-to-MITRE-Attack](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack), DeepBlueCLI): the count per file matches `Get-WinEvent` exactly for every supported event id.
 - The registry test corpus of [yarp](https://github.com/msuhanov/yarp): the transaction log replay (in the shared [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate) gives the same hive bins as Windows 10 and Windows 7 when they recovered those dirty hives themselves.
@@ -117,7 +117,7 @@ The TaskScheduler operational channel is off by default on Windows clients and n
 ## Limits worth knowing
 
 - BitLocker volumes are detected and skipped; decrypt first.
-- XFS and btrfs partitions are not read yet; `hiberfil.sys` is scanned raw, its compressed pages are not decoded.
+- btrfs partitions are not read yet; `hiberfil.sys` is scanned raw, its compressed pages are not decoded.
 - Classic syslog has no year; it is inferred from the file's modification time, so logs spanning more than a year lose precision.
 - On a Windows host with the default audit policy there is no 4688 at all, and without command-line auditing the command line is empty; the hunt's genealogy rules need one of Security 4688, Sysmon 1, auditd or `pacct`.
 

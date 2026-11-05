@@ -153,10 +153,7 @@ pub fn parse_file(path: &Path, computer_hint: &str) -> Vec<Event> {
     }
     if !audit_lines.is_empty() {
         let from_audit = crate::parsers::linux::audit::parse_audit_lines(audit_lines.into_iter(), &audit_host);
-        events.extend(from_audit.into_iter().map(|mut e| {
-            e.parentprocessname = format!("{} (journal audit transport)", e.parentprocessname);
-            e
-        }));
+        events.extend(from_audit);
     }
     if debug {
         eprintln!("[journal] {}: {} entries read, {} rows", path.display(), entries, events.len());

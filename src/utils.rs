@@ -13,11 +13,14 @@ pub fn source_file_name(target: &Path, path: &Path) -> String {
     shown.to_string_lossy().replace(char::from(92), "/")
 }
 
-/// Stamps `source_file` on every event that does not carry one yet.
+/// Stamps `source_file` on every event that does not carry one yet. A parser that wants a
+/// note after the file name (`:line 3 of 5`) leaves it in the field starting with `:`.
 pub fn stamp_source_file(events: &mut [Event], name: &str) {
     for e in events.iter_mut() {
         if e.source_file.is_empty() {
             e.source_file = name.to_string();
+        } else if e.source_file.starts_with(':') {
+            e.source_file = format!("{}{}", name, e.source_file);
         }
     }
 }

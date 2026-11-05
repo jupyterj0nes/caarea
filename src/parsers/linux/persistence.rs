@@ -276,7 +276,7 @@ pub fn parse_running_processes_paths(file_path: &Path, computer_name: &str) -> V
                         target_username: "root".to_string(),
                         processname: target.split_whitespace().next().unwrap_or(target).to_string(),
                         commandline: Some(format!("Executing Binary Link: {}", target)),
-                        parentprocessname: "N/A".to_string(),
+                        parentprocessname: String::new(),
                         meta: None,
                     });
                 }

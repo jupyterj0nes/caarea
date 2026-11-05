@@ -25,7 +25,6 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
         return Vec::new();
     }
     let user = user_from_path(path);
-    let source = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let n = lines.len() as i64;
     lines
         .iter()
@@ -39,7 +38,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
             }
             let first = first.trim_matches(|c| c == '"' || c == '\'');
             Event {
-                source_file: String::new(),
+                source_file: format!(":line {} of {} (file time)", i + 1, n),
                 timestamp: minus_micros(&mtime, n - 1 - i as i64),
                 computer: computer.to_string(),
                 artifact: "powershell:history".to_string(),
@@ -49,7 +48,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
                 target_username: String::new(),
                 processname: first.to_string(),
                 commandline: Some(line.to_string()),
-                parentprocessname: format!("{} (line {} of {}, file time)", source, i + 1, n),
+                parentprocessname: "powershell.exe".to_string(),
                 meta: None,
             }
         })

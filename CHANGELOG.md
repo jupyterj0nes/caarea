@@ -2,6 +2,14 @@
 
 ## v0.4.0 (2026-11-05)
 
+### XFS volumes
+
+- Disk images with XFS partitions (GPT, MBR or a bare partition image) and XFS logical volumes inside LVM2 are read like the ext4 ones: the same files staged into the same tree, hostname and time zone included, through the `rust-fs-xfs` driver faramir uses (`src/ingest/xfs_image.rs`; v4 and v5 with checksums). XFS keeps no block journal, so nothing deleted comes back from it; `--carve` still reads the raw bytes. Tested on faramir's lab images (`tests/fixtures/linux_disk`: a GPT XFS partition and an LVM XFS logical volume with one canary per technique).
+
+### `parentprocessname` names a process, `source_file` names the file
+
+- The rows that put the file or the container they were read from into `parentprocessname` (Prefetch, Amcache, `$MFT` and `$UsnJrnl` rows, Defender logs, WER reports, the PowerShell history, `utmp`, container configs, the carver's rows) now leave it to `source_file`, which has the relative path, and say the launching component when there is one (`MsMpEng.exe`, `WerFault.exe`, `powershell.exe`, `dockerd`, `crond`) or nothing when the source names no creator. `N/A` is gone: the column is empty. The PowerShell history keeps its line in `source_file` (`PSReadLine/ConsoleHost_history.txt:line 3 of 5 (file time)`); the journal's audit rows no longer carry `(journal audit transport)` in the parent, `source_file` says it is the journal.
+
 ### Nineteen columns, in masstin's verticals
 
 The timeline has the width and the column order of masstin's, like faramir's and allymacb's: fourteen event columns, each in the position of the masstin column closest in meaning and under caarea's own name, then the five-column tail. Readers of the fifteen-column layout need updating; the ten columns of v0.3.0 keep their values, byte for byte (compared on the DeepBlueCLI set, 13,590 rows), only their positions change.

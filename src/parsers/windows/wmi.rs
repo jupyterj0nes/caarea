@@ -222,7 +222,6 @@ fn subject(hit: &Hit) -> String {
 pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
     let Ok(data) = std::fs::read(path) else { return Vec::new() };
     let mtime = file_mtime_iso(path);
-    let source = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let mut events = Vec::new();
     for hit in scan(&data) {
         // The record stamp is the WMI service's start time with a sequence counter in the
@@ -250,7 +249,7 @@ pub fn parse_file(path: &Path, computer: &str) -> Vec<Event> {
             target_username: String::new(),
             processname: subject(&hit),
             commandline: Some(format!("{} ({}): {}", what, when, hit.strings.join(" | "))),
-            parentprocessname: source.clone(),
+            parentprocessname: String::new(),
             meta: None,
         });
     }

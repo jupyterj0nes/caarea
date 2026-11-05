@@ -1,6 +1,7 @@
 pub mod archive;
 pub mod image;
 pub mod linux_image;
+pub mod xfs_image;
 pub mod live;
 pub mod triage;
 pub mod vhd;

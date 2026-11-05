@@ -141,7 +141,7 @@ pub fn record_event(rec: &AcctRecord, computer_name: &str) -> Option<Event> {
         target_username: if is_superuser { "root".to_string() } else { user_label },
         processname: rec.comm.clone(),
         commandline: Some(details),
-        parentprocessname: if rec.ppid > 0 { format!("PID: {}", rec.ppid) } else { "N/A".to_string() },
+        parentprocessname: if rec.ppid > 0 { format!("PID: {}", rec.ppid) } else { String::new() },
         meta: Some(Box::new(ProcMeta { ppid: rec.ppid, ..Default::default() })),
     })
 }

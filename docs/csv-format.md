@@ -18,7 +18,7 @@ Timestamps are UTC with a fixed width (`YYYY-MM-DDTHH:MM:SS.ffffffZ`), so sortin
 | 6 | `target_user_name` | `target_username` | Who it ran as, when different from who ran it (`sudo`, `su`, services) |
 | 7 | `target_domain_name` | `reserved_1` | Always empty: a domain has no execution equivalent (the account keeps its `DOMAIN\user` form in the user columns) |
 | 8 | `src_computer` | `processname` | Binary, script, task or package |
-| 9 | `src_ip` | `parentprocessname` | Where the execution came from: the parent process or launching component. When the source only gave a PID (auditd, `pacct`, 4688 before Windows 10) and the creator's own row is in the timeline, the name is filled in as `/usr/bin/sudo (PID: 12493)` |
+| 9 | `src_ip` | `parentprocessname` | Where the execution came from: the parent process (`C:\Windows\explorer.exe`, `/usr/bin/sudo`) or the component that launched the row (`services.exe`, `Task Scheduler`, `crond`, `systemd`, `WerFault.exe`). When the source only gave a PID (auditd, `pacct`, 4688 before Windows 10) and the creator's own row is in the timeline, the name is filled in as `/usr/bin/sudo (PID: 12493)`. Empty when the source names no creator (Prefetch, Amcache, ShimCache, BAM, `$MFT`, logins). Never a file or a container: that is `source_file` |
 | 10 | `subject_user_name` | `subject_username` | Who ran it |
 | 11 | `subject_domain_name` | `reserved_2` | Always empty |
 | 12 | `logon_id` | `pid` | Process id when the source has one (for 4688 it is the *new* process); the id that ties rows together, as masstin's logon id does |

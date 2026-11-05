@@ -100,7 +100,7 @@ pub fn parse_mail_spool(path: &Path, computer: &str) -> Vec<Event> {
             target_username: who,
             processname: cmd.split_whitespace().next().unwrap_or("").to_string(),
             commandline: Some(format!("cron job output mailed: {}", cmd)),
-            parentprocessname: format!("mail spool {}", user),
+            parentprocessname: "crond".to_string(),
             meta: None,
         });
     }
