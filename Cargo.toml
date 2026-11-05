@@ -1,6 +1,6 @@
 [package]
 name = "caarea"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "CAAREA - Chronological Artifacts & Activity Reconstruction Engine for Analysis (native Rust DFIR execution timeliner)"
 

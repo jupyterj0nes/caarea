@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 (2026-11-05)
 
 ### Nineteen columns, in masstin's verticals
 
