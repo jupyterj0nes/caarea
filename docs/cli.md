@@ -44,4 +44,4 @@ caarea [OPTIONS] --output <PATH>
 
 ## What comes back
 
-The CSV is written at the end of the run, in one piece; an existing file is not touched unless `--overwrite` is given. `--hunt` writes a second CSV next to it (`<output>.hunt.csv` unless `--hunt-output` names it). The console prints what was found per source and, with `--hunt`, how many rows were judged and which rules fired; `-s` keeps only errors. Nothing is ever written into the evidence: archives and images are unpacked to a per-run temporary folder that is removed afterwards, or kept where `--stage-dir` says.
+The CSV is written at the end of the run, in one piece; an existing file is not touched unless `--overwrite` is given. `--hunt` writes a second CSV next to it (`<output>.hunt.csv` unless `--hunt-output` names it). The console prints what was found per source and, with `--hunt`, how many rows were judged, which rules fired and the rows that deserve reading first with the reason in words; `-s` keeps only errors. Nothing is ever written into the evidence: archives and images are unpacked to a per-run temporary folder that is removed afterwards, or kept where `--stage-dir` says.

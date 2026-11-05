@@ -298,6 +298,65 @@ pub fn summary(findings: &[Finding]) -> BTreeMap<&'static str, usize> {
     m
 }
 
+/// One of the entries the console shows at the end of a hunt: a judged row, with every
+/// finding on it strongest first, and how many rows of the timeline say the same (same
+/// process, same rules), the first of them standing for all.
+pub struct TopRow<'a> {
+    pub tail: &'a Tail,
+    pub findings: Vec<&'a Finding>,
+    /// Rows with the same `processname` and the same rules; `findings` are the first one's.
+    pub count: usize,
+    /// Timestamp of the last of those rows (the first one's is `findings[0].timestamp`).
+    pub last: String,
+}
+
+/// The `n` entries that deserve reading first: the strongest state, then the highest score,
+/// then the strongest rule, then the earliest. Rows with the same process and the same rules
+/// are one entry with a count, so a beacon that ran forty times takes one place, not forty.
+/// Rows a clean host vouches for (`habitual`) are left out.
+pub fn top_rows<'a>(findings: &'a [Finding], tails: &'a [Tail], n: usize) -> Vec<TopRow<'a>> {
+    let mut by_row: BTreeMap<usize, Vec<&Finding>> = BTreeMap::new();
+    for f in findings {
+        by_row.entry(f.row).or_default().push(f);
+    }
+    let mut groups: BTreeMap<(String, String), TopRow> = BTreeMap::new();
+    for (row, mut fs) in by_row {
+        let Some(tail) = tails.get(row) else { continue };
+        if tail.is_empty() || tail.hunt == HUNT_HABITUAL {
+            continue;
+        }
+        fs.sort_by(|a, b| b.level().cmp(&a.level()).then(b.score.cmp(&a.score)).then(a.rule_id.cmp(b.rule_id)));
+        let key = (fs[0].processname.to_lowercase(), fs.iter().map(|f| f.key()).collect::<Vec<_>>().join("+"));
+        let ts = fs[0].timestamp.clone();
+        match groups.get_mut(&key) {
+            Some(g) => {
+                g.count += 1;
+                if ts < g.findings[0].timestamp {
+                    g.findings = fs;
+                    g.tail = tail;
+                }
+                if ts > g.last {
+                    g.last = ts;
+                }
+            }
+            None => {
+                groups.insert(key, TopRow { tail, findings: fs, count: 1, last: ts });
+            }
+        }
+    }
+    let mut rows: Vec<TopRow> = groups.into_values().collect();
+    rows.sort_by(|a, b| {
+        state_rank(b.tail.hunt)
+            .cmp(&state_rank(a.tail.hunt))
+            .then(b.tail.hunt_score.cmp(&a.tail.hunt_score))
+            .then(b.findings[0].level().cmp(&a.findings[0].level()))
+            .then(b.findings[0].score.cmp(&a.findings[0].score))
+            .then(a.findings[0].timestamp.cmp(&b.findings[0].timestamp))
+    });
+    rows.truncate(n);
+    rows
+}
+
 /// Header of the findings table. `rank, significant, p_value, q_value` open it and
 /// `signature, ..., why_unusual, evidence` close it as in masstin's and allymacb's hunt
 /// tables; the middle names the row the way the timeline does. `score` is the catalogue
@@ -384,6 +443,51 @@ mod tests {
         assert_eq!(t.csv(), ",\"candidate\",70,\"A \"\"b\"\", c\",,");
         let t = Tail { verdict: "benign".to_string(), ..Default::default() };
         assert_eq!(t.csv(), ",,,,\"benign\",");
+    }
+
+    #[test]
+    fn test_top_rows_group_and_rank() {
+        let f = |row: usize, ts: &str, rule: &'static str, score: u8, name: &str| Finding {
+            row,
+            timestamp: ts.to_string(),
+            computer: "H".to_string(),
+            rule_id: rule,
+            variant: "",
+            score,
+            mitre: "T1036",
+            title: format!("{} fired", rule),
+            explanation: "why".to_string(),
+            lineage: String::new(),
+            pid: 1,
+            processname: name.to_string(),
+            commandline: String::new(),
+            parentprocessname: String::new(),
+            subject_username: String::new(),
+            artifact: "evtx:4688".to_string(),
+            related: String::new(),
+        };
+        let findings = vec![
+            f(0, "2026-01-01T00:00:03Z", "GEN-SVCHOST-SHELL", 35, "cmd.exe"),
+            f(1, "2026-01-01T00:00:01Z", "PATH-WINDOWS-ROOT", 70, "beacon.ps1"),
+            f(2, "2026-01-01T00:00:02Z", "PATH-WINDOWS-ROOT", 70, "beacon.ps1"),
+            f(3, "2026-01-01T00:00:00Z", "GEN-OFFICE-SHELL", 85, "cmd.exe"),
+            f(4, "2026-01-01T00:00:04Z", "GEN-SVCHOST-SHELL", 35, "cmd.exe"),
+        ];
+        let mut tails = tails(5, &findings);
+        // a row a clean host vouches for is left out
+        tails[4].hunt = HUNT_HABITUAL;
+        let top = top_rows(&findings, &tails, 10);
+        // the high rule first, then the two dropper rows as one entry (measured 39, medium), then the pointer (39, low)
+        assert_eq!(top.len(), 3);
+        assert_eq!(top[0].findings[0].rule_id, "GEN-OFFICE-SHELL");
+        assert_eq!(top[0].tail.hunt, HUNT_SIGNIFICANT);
+        assert_eq!(top[1].findings[0].rule_id, "PATH-WINDOWS-ROOT");
+        assert_eq!(top[1].count, 2);
+        assert_eq!(top[1].findings[0].timestamp, "2026-01-01T00:00:01Z");
+        assert_eq!(top[1].last, "2026-01-01T00:00:02Z");
+        assert_eq!(top[2].findings[0].rule_id, "GEN-SVCHOST-SHELL");
+        assert_eq!(top[2].count, 1);
+        assert_eq!(top_rows(&findings, &tails, 1).len(), 1);
     }
 
     #[test]

@@ -36,6 +36,57 @@ fn log_message(silent: bool, message: &str) {
     }
 }
 
+/// The console block that closes a hunt: each of the rows that deserve reading first with its
+/// state, its score, when and what ran, who created it, every rule that fired on it and, in
+/// words, why that matters.
+fn format_top_rows(rows: &[hunt::TopRow]) -> Vec<String> {
+    let mut out = Vec::new();
+    for r in rows {
+        let f = r.findings[0];
+        let when = f.timestamp.split('.').next().unwrap_or(&f.timestamp).trim_end_matches('Z');
+        let times = if r.count > 1 {
+            let last = r.last.split('.').next().unwrap_or(&r.last).trim_end_matches('Z');
+            format!("{}Z  ({} rows, until {}Z)", when, r.count, last)
+        } else {
+            format!("{}Z", when)
+        };
+        out.push(format!("  {:<10} {:>3}  {}  {}", r.tail.hunt, r.tail.hunt_score.unwrap_or(0), times, f.processname));
+        if !f.parentprocessname.is_empty() {
+            out.push(format!("  {:16}created by {}", "", f.parentprocessname));
+        }
+        for g in &r.findings {
+            out.push(format!("  {:16}{} ({}): {} [{}]", "", g.rule_id, g.level().word(), g.title, g.mitre));
+            for line in wrap_words(&g.explanation, 92) {
+                out.push(format!("  {:16}   {}", "", line));
+            }
+        }
+        if f.lineage.contains('>') {
+            out.push(format!("  {:16}lineage: {}", "", f.lineage));
+        }
+        out.push(String::new());
+    }
+    out
+}
+
+/// Word wrap at `width` columns; a word longer than the width stays on its own line.
+fn wrap_words(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > width {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 /// Removes exact duplicates (same artifact seen twice, e.g. from a live file and a copy in a
 /// triage package, or from the live volume and a shadow copy). Two events are duplicates only
 /// when *every* column is identical (ignoring the provenance), so distinct executions that
@@ -281,6 +332,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         None
     };
     let tails = findings.as_deref().map(|f| hunt::tails(all_events.len(), f)).unwrap_or_default();
+    let top_lines: Vec<String> = findings.as_deref().map(|f| format_top_rows(&hunt::top_rows(f, &tails, 5))).unwrap_or_default();
     let pre_filter_count = all_events.len();
 
     // Apply Time of Interest (TOI) filter if requested; the tails travel with their rows
@@ -311,6 +363,14 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         log_message(silent, &format!("🔎 Hunt: {} findings saved to: {} ({} timeline rows judged: {} significant, {} candidate)", findings.len(), hunt_output, judged, significant, candidate));
         for (rule, n) in hunt::summary(&findings) {
             log_message(silent, &format!("   {:<28} {}", rule, n));
+        }
+        if !top_lines.is_empty() && !silent {
+            println!();
+            println!("   The rows that deserve reading first (every hit, one per line, in {}):", hunt_output);
+            println!();
+            for line in &top_lines {
+                println!("{}", line);
+            }
         }
     }
 

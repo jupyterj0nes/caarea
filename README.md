@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="resources/caarea_logo.png" alt="CAAREA: a timeline of executions, one of them lit, the process tree it spawned, and the name" width="640"/>
+  <img src="resources/caarea_logo.png" alt="CAAREA: a carea leonés and the mountains of León drawn as a process tree, nodes and edges, one execution lit; the name below" width="560"/>
   <br><br>
   <strong>One command. Every program execution on a machine, in order, in a CSV.</strong>
   <br>
@@ -18,9 +18,9 @@ caarea -f workstation.E01 -o workstation.csv --hunt
 ```
 
 <div align="center">
-  <img src="resources/demo-hunt.gif" alt="caarea --hunt over the public DeepBlueCLI EVTX set: the sources are read, the timeline is saved, 277 rows are judged, and the rows with the highest hunt_score are the Metasploit PsExec droppers with the reason in words"/>
+  <img src="resources/demo-hunt.gif" alt="caarea --hunt over a Windows Server triage and an Ubuntu host: the sources are read, one timeline is saved, 34 rows are judged, and the console closes with the rows that deserve reading first and the reason for each in words"/>
   <br>
-  <em>One command over the 21 public EVTX files of DeepBlueCLI: 13,590 rows in eight seconds, 277 of them judged. Then what the hunt found, with the reason for each row in words: the Metasploit PsExec droppers (a random name at the root of <code>C:\Windows</code>), an installer run from inside an archive's temp folder, Chrome launching <code>msiexec</code>.</em>
+  <em>One run over two hosts of the lab: the triage of a Windows Server (event logs, scheduled tasks, Defender, Windows Error Reporting, PowerShell history) and an Ubuntu host (journal, syslog, cron, package logs). One timeline, 6,115 rows, and the hunt closes with the rows that deserve reading first, each with its reason in words: a beacon run from <code>Users\Public</code>, a service whose binary is <code>cmd.exe</code>, a cron job running from <code>/tmp</code>, and two pointers it says are only pointers.</em>
 </div>
 
 ## What it does
@@ -80,7 +80,7 @@ Event ids, keys and the notes on each source: [What it reads →](docs/sources.m
 
 ## Process hunting
 
-`--hunt` runs the rules over the finished timeline and fills the tail of each row it judges: `hunt` is `significant` or `candidate` (or `habitual` when a clean reference host executes the same thing), `hunt_score` is how rare the row is on masstin's scale, 0 to 100, and `hunt_why` names every rule that fired, strongest first, then the lineage. The ten event columns do not change a byte. The detailed findings, with the catalogue score and the ATT&CK technique of every hit, go to a second CSV next to the timeline.
+`--hunt` runs the rules over the finished timeline and fills the tail of each row it judges: `hunt` is `significant` or `candidate` (or `habitual` when a clean reference host executes the same thing), `hunt_score` is how rare the row is on masstin's scale, 0 to 100, and `hunt_why` names every rule that fired, strongest first, then the lineage. The ten event columns do not change a byte. The detailed findings, with the catalogue score and the ATT&CK technique of every hit, go to a second CSV next to the timeline, and the console closes with the rows that deserve reading first: state, score, when and what ran, who created it, every rule that fired and, in words, why that matters. Rows that say the same thing (the same process, the same rules) are one entry with a count.
 
 <div align="center">
   <img src="resources/hunt-rows.svg" alt="Three judged rows from the DeepBlueCLI set: a PsExec dropper at the root of C:\Windows with a random name, an installer run from an archive's temp folder, msiexec launched by Chrome; each with its hunt state, its score and the rules in words" width="100%"/>
@@ -104,7 +104,7 @@ The rules only state what a documented source states: the expected-parent and al
 
 ## How it is tested
 
-`cargo test` runs 151 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
+`cargo test` runs 152 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
 
 - 524 public EVTX samples ([EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES), [EVTX-to-MITRE-Attack](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack), DeepBlueCLI): the count per file matches `Get-WinEvent` exactly for every supported event id.
 - The registry test corpus of [yarp](https://github.com/msuhanov/yarp): the transaction log replay (in the shared [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate) gives the same hive bins as Windows 10 and Windows 7 when they recovered those dirty hives themselves.

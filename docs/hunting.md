@@ -15,6 +15,20 @@ caarea -f workstation.E01 -o workstation.csv --hunt
 caarea -d /cases/acme/triage -o acme.csv --hunt --hunt-output acme.findings.csv --toi 2026-09-24T12:00:00Z
 ```
 
+## What the console says
+
+The run closes with the rows that deserve reading first, up to five: the strongest state, then the highest score, then the strongest rule, then the earliest. Rows with the same process and the same rules are one entry with a count and the span of time they cover, so a beacon that ran forty times takes one place, not forty; rows a clean host vouches for are left out. Each entry gives the state and the score, when and what ran, who created it, every rule that fired with its level and technique, the rule's explanation in words, and the lineage:
+
+```text
+  candidate   39  2026-10-28T20:20:00Z  (9 rows, until 2026-10-28T20:24:02Z)  C:\Users\Public\rf_wpad_beacon.ps1
+                  created by powershell.exe
+                  PATH-SCRATCH (medium): rf_wpad_beacon.ps1 ran from Users\Public [T1036]
+                     C:\Users\Public: Users\Public is writable by everyone and readable by everyone, so it is
+                     where tooling is dropped for every account on the host.
+```
+
+`-s` silences it with the rest of the console. The full list is the findings table.
+
 ## The findings table
 
 The detailed findings go to a second CSV next to the timeline (`host.hunt.csv`, or `--hunt-output`), one row per rule hit, ranked by catalogue score:

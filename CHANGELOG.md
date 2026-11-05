@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### The hunt closes with the rows that deserve reading first
+
+- `--hunt` ends its console output with up to five entries: the strongest state, the highest score, the strongest rule, the earliest; the state and the score, when and what ran, who created it, every rule that fired with its level and technique, the explanation in words (`why_unusual`) and the lineage. Rows with the same process and the same rules are one entry with a count and the span they cover; rows a clean host vouches for are left out (`hunt::top_rows`). The findings table and the timeline are unchanged.
+
 ### A README to read in two minutes, the detail in `docs/`
 
 - The README opens with the logo (`resources/caarea_logo.png`), a recording of `caarea --hunt` over the public DeepBlueCLI set (`resources/demo-hunt.gif`, made with vhs) and a figure of three judged rows (`resources/hunt-rows.svg`), then says what the tool does, how to start, what comes out, what it reads and how it hunts, each in a screenful with a link to its page.
