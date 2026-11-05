@@ -20,7 +20,7 @@ caarea -f workstation.E01 -o workstation.csv --hunt
 <div align="center">
   <img src="resources/demo-hunt.gif" alt="caarea --hunt over the public DeepBlueCLI EVTX set: the sources are read, the timeline is saved, 277 rows are judged, and the rows with the highest hunt_score are the Metasploit PsExec droppers with the reason in words"/>
   <br>
-  <em><code>caarea --hunt</code> over the 21 public EVTX files of DeepBlueCLI: 13,590 rows in eight seconds, 277 of them judged. Sorted by <code>hunt_score</code>, the first rows are the Metasploit PsExec droppers (a random name at the root of <code>C:\Windows</code>) and an installer run from an archive's temp folder, and every row says why.</em>
+  <em><code>caarea --hunt</code> over the 21 public EVTX files of DeepBlueCLI: 13,590 rows in eight seconds, 277 of them judged. Then the judged rows, rarest first: the Metasploit PsExec droppers (a random name at the root of <code>C:\Windows</code>) and an installer run from an archive's temp folder. And the first row's <code>hunt_why</code>: every rule that fired, in words.</em>
 </div>
 
 ## What it does
