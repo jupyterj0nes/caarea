@@ -331,6 +331,26 @@ pre-Windows 10 4688). Validated on DEV-SRV01 (Security.evtx, 129 4688 rows: the 
 task and service found, nothing else flagged) and LEO-LNX01 (165 of 237 execve rows
 resolved to a named parent, 0 findings on a clean host).
 
+Pending (2026-11-09), where this stopped:
+- **Release 0.4.0**: `Cargo.toml` and the CHANGELOG are at 0.4.0 but the tag `v0.4.0` exists
+  only locally, on `1849021` (before the parallelism work); move it to the head and push it
+  (`git tag -f -a v0.4.0 && git push origin v0.4.0`) when the version is to go out, or fold
+  the *Unreleased* section into it first.
+- **Default priority**: `--priority low` is the default by decision; measured cost 10 to 25 %
+  on a large set with background load, and a run starved behind the antivirus's first scan of
+  the evidence (41 s against 2 s). Reconsider `normal` as the default, or keep `low` and say
+  in the README that the case folder must be excluded from real-time scanning.
+- **Parser families of one directory in parallel** (about 1 s of 4 on the mixed lab triage):
+  needs the console collected per family and a peak-memory measurement on a large image.
+- **Clean reference and SRUM paths**: SRUM rows spell the image as
+  `\Device\HarddiskVolume3\Windows\Temp\...`, which `hunt::clean` does not normalise, so
+  `DismHost.exe` from SRUM stays `candidate` on a clean host.
+- **`parentprocessname` of AppLocker 8002/8003** carries the publisher string (`Fqbn`); it
+  belongs in `commandline`, the parent should be empty.
+- **Hunt phases H3 to H6** below are untouched; H4 should also inherit a parent's mark down
+  the tree (`parent: rule ... on ...` clause, half the parent's points).
+- **Demo GIF** weighs 6.5 MB (`resources/demo-hunt.gif`); re-encode at 6 fps if it matters.
+
 Rules state only what a documented source states: SANS *Hunt Evil* (Lee and Pilkington,
 2018) for the boot tree and the per-process facts, Elastic's *Unusual Parent-Child
 Relationship* for the closed children lists and the field exceptions, EchoTrail only to
