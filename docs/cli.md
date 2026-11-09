@@ -20,6 +20,9 @@ caarea [OPTIONS] --output <PATH>
       --hunt-output <PATH>    Destination CSV for the findings
       --stage-dir <PATH>      Keep the artifacts extracted from images, live volumes and archives here
       --overwrite             Replace the output file if it exists
+      --threads <N>           Worker threads for the parsers and the hunt (default: every logical
+                              core, or RAYON_NUM_THREADS); the CSV is the same whatever the count
+      --priority <low|normal> Process priority (default: low, yields the CPU to anything else)
   -s, --silent                Print nothing but errors
   -h, --help / -V, --version
 ```
@@ -41,6 +44,10 @@ caarea [OPTIONS] --output <PATH>
 ## Windows of time
 
 `--toi 2026-09-24T12:00:00Z --toi-window 6` keeps the events six hours either side of the moment of interest; `--start-time` and `--end-time` set the window by its edges. Rows outside the window are not written, but they still feed the process tree, so a parent that started before the window is still named in `parentprocessname` and still counts for the hunt's genealogy.
+
+## Threads and priority
+
+The parsers and the hunt run on one worker pool with as many threads as logical cores the process can see (`--threads N` or `RAYON_NUM_THREADS` set it by hand; `--threads 1` runs everything in series). The pool takes every core, so by default the process runs one priority step below normal (`--priority low`): the scheduler gives a core back the moment the console, the antivirus or anything else wants one, and nothing is lost while the machine is idle. `--priority normal` competes as an equal. None of this changes the output: files are parsed in path order, rows are collected in that order and the timeline is sorted on a total order (time, then every event column), so the CSV is the same byte with one thread or sixty-four; a test runs the pipeline on one thread and on the pool and compares the files. `CAAREA_TIMING=1` prints the time of every phase on stderr.
 
 ## What comes back
 

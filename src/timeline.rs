@@ -30,6 +30,24 @@ pub const HEADER: &str = "\"timestamp\",\"computer\",\"artifact\",\"event_id\",\
 /// Number of columns every timeline has: fourteen of the event, five of the tail.
 pub const COLUMNS: usize = 19;
 
+/// The order of the timeline: by time, then by every event column, so two runs (and any
+/// thread count) write the same bytes. After deduplication no two rows are equal on all of
+/// them, so the order is total.
+pub fn event_order(a: &Event, b: &Event) -> std::cmp::Ordering {
+    a.timestamp
+        .cmp(&b.timestamp)
+        .then_with(|| a.computer.cmp(&b.computer))
+        .then_with(|| a.artifact.cmp(&b.artifact))
+        .then_with(|| a.event_id.cmp(&b.event_id))
+        .then_with(|| a.pid.cmp(&b.pid))
+        .then_with(|| a.subject_username.cmp(&b.subject_username))
+        .then_with(|| a.target_username.cmp(&b.target_username))
+        .then_with(|| a.processname.cmp(&b.processname))
+        .then_with(|| a.parentprocessname.cmp(&b.parentprocessname))
+        .then_with(|| a.commandline.cmp(&b.commandline))
+        .then_with(|| a.source_file.cmp(&b.source_file))
+}
+
 /// The event columns of one row, in the order of [`HEADER`], without the tail.
 pub fn event_csv(event: &Event) -> String {
     let state = crate::provenance::split(&event.artifact).1.origin.to_string();

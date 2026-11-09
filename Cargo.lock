@@ -303,6 +303,7 @@ dependencies = [
  "ext4-view",
  "flate2",
  "indicatif",
+ "libc",
  "lnk-core",
  "lvm2",
  "lzma-rs",
@@ -323,6 +324,7 @@ dependencies = [
  "tar",
  "vshadow",
  "walkdir",
+ "windows-sys 0.59.0",
  "zip",
 ]
 

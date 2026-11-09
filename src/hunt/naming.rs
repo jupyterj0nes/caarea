@@ -9,6 +9,7 @@
 //! source only gave a bare name (Defender's MpLog, `linux:audit:user_cmd`) the path rules
 //! have nothing to say and only the name rules run.
 
+use rayon::prelude::*;
 use super::names::{self, DirFamily, NameClass, Os};
 use super::tree::{self, ProcessTree};
 use super::Finding;
@@ -24,17 +25,22 @@ const T_INGRESS: &str = "T1105";
 
 /// Runs the naming and path rules over every row.
 pub fn run(events: &[Event], tree: &ProcessTree) -> Vec<Finding> {
-    let mut out = Vec::new();
-    for (i, e) in events.iter().enumerate() {
-        if tree::is_process_exit(&e.artifact) || e.processname.trim().is_empty() {
-            continue;
-        }
-        match names::os_of(&e.artifact) {
-            Os::Windows => windows_rules(events, tree, i, &mut out),
-            Os::Linux => linux_rules(events, tree, i, &mut out),
-        }
-    }
-    out
+    // Every row is judged on its own, so the rows go to the worker pool; `collect` keeps
+    // the row order, so the result does not depend on the thread count.
+    (0..events.len())
+        .into_par_iter()
+        .flat_map_iter(|i| {
+            let e = &events[i];
+            let mut out = Vec::new();
+            if !(tree::is_process_exit(&e.artifact) || e.processname.trim().is_empty()) {
+                match names::os_of(&e.artifact) {
+                    Os::Windows => windows_rules(events, tree, i, &mut out),
+                    Os::Linux => linux_rules(events, tree, i, &mut out),
+                }
+            }
+            out
+        })
+        .collect()
 }
 
 /// What the row says the file did: an NTFS row is a write, anything else a run.

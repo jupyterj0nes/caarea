@@ -400,10 +400,27 @@ fn unpack_zip(zip_path: &Path, target_dir: &Path, silent: bool) -> Result<(), Bo
 
         if let Ok(mut out_file) = File::create(&out_path) {
             let _ = io::copy(&mut entry, &mut out_file);
+            // the entry's own modification time, not the moment of extraction: the parsers
+            // that fall back on the file time (cron, systemd units) must see the host's
+            let m = entry.last_modified();
+            if let Some(t) = chrono::NaiveDate::from_ymd_opt(m.year() as i32, m.month() as u32, m.day() as u32)
+                .and_then(|d| d.and_hms_opt(m.hour() as u32, m.minute() as u32, m.second() as u32))
+            {
+                set_file_mtime(&out_file, t.and_utc().timestamp());
+            }
         }
     }
 
     Ok(())
+}
+
+/// Sets a file's modification time to a Unix epoch; a failure leaves the extraction time.
+fn set_file_mtime(file: &File, epoch: i64) {
+    if epoch > 0 {
+        if let Some(t) = std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(epoch as u64)) {
+            let _ = file.set_modified(t);
+        }
+    }
 }
 
 /// Extracts the regular-file entries of a tar stream into `target_dir`, safely.
@@ -451,8 +468,10 @@ fn unpack_tar_entries<R: Read>(mut archive: TarArchive<R>, target_dir: &Path, si
             let _ = fs::create_dir_all(parent);
         }
 
+        let mtime = entry.header().mtime().unwrap_or(0);
         if let Ok(mut out_file) = File::create(&out_path) {
             let _ = io::copy(&mut entry, &mut out_file);
+            set_file_mtime(&out_file, mtime as i64);
         }
     }
 

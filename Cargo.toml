@@ -36,6 +36,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 rust-fs-xfs = { version = "0.14", default-features = false }
 rust-fs-core = { version = "0.3", default-features = false }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

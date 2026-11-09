@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### The same bytes on one thread or twelve, and faster where it was measured to pay
+
+Reliability first. Two runs now write the same CSV byte for byte, and so do `--threads 1` and the full pool: the timeline is sorted on a total order (time, then every event column: `timeline::event_order`), the findings table on score, time, rule, row, pattern and title, and the Linux parsers read their files in path order. Archives keep each file's own modification time when they are unpacked (zip and tar), so the cron and systemd rows that fall back on the file time carry the host's date, not the extraction's; that was the one source of differences between runs. `tests/determinism.rs` runs the whole pipeline on the pool and on one thread over the XFS lab image and compares the files.
+
+Then speed, measured on a 12-core machine (`CAAREA_TIMING=1` prints the time of every phase on stderr), change by change:
+
+- **EVTX**: the `evtx` crate parses its chunks on rayon's pool, but our `par_bridge` consumed its iterator under the bridge's lock and serialised that work; the iterator is now drained from one thread and the records, taken as JSON values with no text round trip, are turned into rows in ordered batches of 4,096. One Security.evtx of 8,377 records: 1.03 s to 0.46 to 0.66 s. DeepBlueCLI (21 files): 1.28 s to 0.80 to 1.07 s.
+- **Hunt**: the naming and path rules judge every row on its own, so the rows go to the pool. DeepBlueCLI: 0.74 s to 0.18 to 0.21 s.
+- **Linux**: one file per task, in path order. Six hosts: 1.56 s to 0.72 s.
+- Deduplication and the final sort use `par_sort`; measured no change (the sort was not the cost), kept for the order guarantee.
+- Whole runs: DeepBlueCLI with `--hunt` 2.9 to 4.0 s before, 1.5 to 2.3 s after; the two-host lab 4.1 to 4.6 s before, 3.9 to 4.3 after (the tgz extraction dominates); 168 EVTX 6.7 to 7.1 s before, 5.9 to 6.0 after.
+
+The policy: the pool takes every logical core (`--threads N` or `RAYON_NUM_THREADS` to say otherwise) and the process runs one priority step below normal by default (`--priority low`; `--priority normal` competes as an equal). Measured cost of the low priority: 10 to 25 % on the 168-file set with the usual background load, nothing on small sets; when the antivirus was scanning the evidence folder for the first time, the low-priority run waited behind it (41 s against 2 s). Exclude the case folder from real-time scanning, or run with `--priority normal`.
+
+Not done, by measurement: the families of one directory in parallel would save about 1 s of 4 on the mixed lab triage but needs the console collected per family first (planned); several `-d` at once, image and shadow-copy extraction and carving are bound by the disk, not the CPU (0.26 cores measured on the ext4 image), and stay in series.
+
 ## v0.4.0 (2026-11-05)
 
 ### XFS volumes

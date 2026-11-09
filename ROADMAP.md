@@ -388,6 +388,13 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
   on LEO-LNX01 only the twelve cron and systemd rows whose timestamp is the extraction
   time of the archive differ (a parser fallback to the file time, to fix on its own). faramir's `flag, score, reasons` still has to move to the same tail with the
   same words for masstin's claim about the four tools to be true.
+- **Parallelism (done, measured)**: see the CHANGELOG entry *The same bytes on one thread
+  or twelve*. Done: total order and determinism test, real mtimes out of archives, the EVTX
+  drain without `par_bridge`, the hunt rules per row, the Linux files per task, `par_sort`,
+  `--threads`, `--priority` (low by default), `CAAREA_TIMING`. Deferred: the parser families
+  of one directory in parallel (saves about 1 s of 4 on a mixed triage; needs the console
+  collected per family and a memory measurement on a large image). Rejected by measurement:
+  several `-d` at once, image and shadow-copy extraction, carving (disk-bound, 0.26 cores).
 - **H3 (1 d)**: command line. PowerShell encoded / hidden / bypass / download cradles with
   Base64 decoded and rescanned; `certutil`, `bitsadmin`, `mshta`, `regsvr32`, `rundll32`,
   `wmic`, `schtasks`, `sc`, `net user`, `reg add Run`; ransomware preparation (`vssadmin`,

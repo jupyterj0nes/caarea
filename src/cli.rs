@@ -112,6 +112,21 @@ pub fn build_cli() -> Command {
                 .help("Suppress verbose logging output")
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("threads")
+                .long("threads")
+                .value_name("N")
+                .value_parser(clap::value_parser!(usize))
+                .help("Worker threads for the parsers and the hunt (default: every logical core, or RAYON_NUM_THREADS); the CSV is the same whatever the count"),
+        )
+        .arg(
+            Arg::new("priority")
+                .long("priority")
+                .value_name("low|normal")
+                .default_value("low")
+                .value_parser(["low", "normal"])
+                .help("Process priority: low (default) yields the CPU to whatever else the machine is doing, normal competes as an equal"),
+        )
 }
 
 /// Validate input parameters

@@ -21,6 +21,7 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use crate::parsers::evtx::Event;
@@ -406,15 +407,20 @@ pub fn process_linux_target_with_hint(
 
     let mut all_events = Vec::new();
 
-    for entry in WalkDir::new(target).into_iter().flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let mut file_events = process_linux_file_tz(path, &hostname, &tz);
-        crate::utils::stamp_source_file(&mut file_events, &crate::utils::source_file_name(target, path));
-        all_events.extend(file_events);
-    }
+    // The files are listed first and sorted, then parsed one per task; `collect` keeps the
+    // list order, so the timeline does not depend on the thread count or on how the file
+    // system enumerates a directory.
+    let mut paths: Vec<std::path::PathBuf> = WalkDir::new(target).into_iter().flatten().filter(|e| e.path().is_file()).map(|e| e.into_path()).collect();
+    paths.sort();
+    let per_file: Vec<Vec<Event>> = paths
+        .par_iter()
+        .map(|path| {
+            let mut file_events = process_linux_file_tz(path, &hostname, &tz);
+            crate::utils::stamp_source_file(&mut file_events, &crate::utils::source_file_name(target, path));
+            file_events
+        })
+        .collect();
+    all_events.extend(per_file.into_iter().flatten());
 
     all_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 

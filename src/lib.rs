@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use chrono::Local;
+use rayon::prelude::*;
 use parsers::evtx::{self, Event};
 use parsers::linux::HostTimezone;
 use parsers::registry;
@@ -25,6 +26,41 @@ pub fn tag_events(events: &mut [Event], prov: &Provenance) {
     }
     for e in events.iter_mut() {
         e.artifact = prov.apply(&e.artifact);
+    }
+}
+
+/// Drops the process one priority step below normal (Windows `BELOW_NORMAL_PRIORITY_CLASS`,
+/// Unix `nice(5)`): the worker pool keeps every core while nothing else wants them.
+fn lower_process_priority() {
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS};
+        SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+    }
+    #[cfg(unix)]
+    unsafe {
+        libc::nice(5);
+    }
+}
+
+/// Phase timer for `CAAREA_TIMING=1`: one line per phase on stderr, nothing otherwise.
+struct Phase {
+    name: String,
+    start: std::time::Instant,
+    on: bool,
+}
+
+impl Phase {
+    fn start(name: impl Into<String>) -> Phase {
+        Phase { name: name.into(), start: std::time::Instant::now(), on: std::env::var_os("CAAREA_TIMING").is_some() }
+    }
+}
+
+impl Drop for Phase {
+    fn drop(&mut self) {
+        if self.on {
+            eprintln!("[timing] {:<40} {:>9.3} s", self.name, self.start.elapsed().as_secs_f64());
+        }
     }
 }
 
@@ -96,7 +132,7 @@ fn wrap_words(text: &str, width: usize) -> Vec<String> {
 /// lowest offset.
 pub fn dedup_events(events: &mut Vec<Event>) -> usize {
     let before = events.len();
-    events.sort_by(|a, b| {
+    events.par_sort_by(|a, b| {
         let (base_a, prov_a) = provenance::split(&a.artifact);
         let (base_b, prov_b) = provenance::split(&b.artifact);
         a.timestamp
@@ -162,6 +198,18 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     // Build CLI and parse arguments
     let matches = cli::build_cli().get_matches();
 
+    // The worker pool: every logical core unless --threads or RAYON_NUM_THREADS says otherwise.
+    // Nothing downstream depends on the count: the parsers collect in file order and the
+    // timeline is sorted on a total order, so the CSV is the same byte with 1 thread or 64.
+    if let Some(n) = matches.get_one::<usize>("threads") {
+        rayon::ThreadPoolBuilder::new().num_threads((*n).max(1)).build_global().map_err(|e| format!("cannot build the thread pool: {}", e))?;
+    }
+    // Low priority by default: the pool takes every core, the scheduler gives them back the
+    // moment the console, the antivirus or anything else wants one.
+    if matches.get_one::<String>("priority").map(|p| p == "low").unwrap_or(true) {
+        lower_process_priority();
+    }
+
     // Extract CLI arguments
     let directories = matches.get_many::<String>("directories").map(|v| v.cloned().collect());
     let files = matches.get_many::<String>("files").map(|v| v.cloned().collect());
@@ -216,7 +264,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     if hunt && Path::new(&hunt_output).exists() && !overwrite {
         return Err(format!("❌ Error: Hunt output file '{}' already exists. Use '--overwrite' to replace it.", hunt_output).into());
     }
-    let workspace = ingest::prepare_evidence(directories.as_deref(), files.as_deref(), silent, stage_dir.as_deref(), carve)?;
+    let workspace = {
+        let _t = Phase::start("ingest (stage archives, images, carve)");
+        ingest::prepare_evidence(directories.as_deref(), files.as_deref(), silent, stage_dir.as_deref(), carve)?
+    };
 
     let run_evtx = modules == "evtx" || modules == "all";
     let run_registry = modules == "registry" || modules == "all";
@@ -245,16 +296,23 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
         let mut dir_events: Vec<Event> = Vec::new();
         if run_evtx {
+            let _t = Phase::start(format!("evtx {}", path.display()));
             dir_events.extend(evtx::process_evtx_target(path, silent)?);
         }
         if run_registry {
+            let _t = Phase::start(format!("registry {}", path.display()));
             dir_events.extend(registry::process_registry_target_with_hint(path, silent, hint)?);
         }
         if run_windows {
-            dir_events.extend(parsers::windows::process_windows_target(path, silent, hint));
+            {
+                let _t = Phase::start(format!("windows artifacts {}", path.display()));
+                dir_events.extend(parsers::windows::process_windows_target(path, silent, hint));
+            }
+            let _t = Phase::start(format!("ntfs {}", path.display()));
             dir_events.extend(parsers::ntfs::process_ntfs_target(path, silent, hint));
         }
         if run_linux {
+            let _t = Phase::start(format!("linux {}", path.display()));
             dir_events.extend(parsers::linux::process_linux_target_with_hint(path, silent, hint, tz_override.as_ref())?);
         }
         if let Some(prov) = origin {
@@ -318,13 +376,19 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     all_events.extend(workspace.events.iter().cloned());
 
     // Remove exact duplicates (same artifact collected twice)
-    let removed = dedup_events(&mut all_events);
+    let removed = {
+        let _t = Phase::start(format!("dedup ({} rows)", all_events.len()));
+        dedup_events(&mut all_events)
+    };
     if removed > 0 {
         log_message(silent, &format!("Removed {} exact duplicate events.", removed));
     }
 
     // Name the creators the parsers could only number (auditd, pacct, pre-Windows 10 4688).
-    let resolved = hunt::tree::resolve_parents(&mut all_events);
+    let resolved = {
+        let _t = Phase::start("resolve parents (process tree)");
+        hunt::tree::resolve_parents(&mut all_events)
+    };
     if resolved > 0 {
         log_message(silent, &format!("Resolved the parent process of {} rows by creator PID.", resolved));
     }
@@ -333,6 +397,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let findings = if hunt {
         let s = start_time.as_deref().and_then(|s| utils::parse_toi_bound(s, false));
         let e = end_time.as_deref().and_then(|e| utils::parse_toi_bound(e, true));
+        let _t = Phase::start("hunt rules");
         Some(hunt::run(&all_events, s.as_deref(), e.as_deref()))
     } else {
         None
@@ -356,10 +421,16 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     }
 
     // Sort and export the timeline
-    rows.sort_by(|a, b| a.0.timestamp.cmp(&b.0.timestamp));
+    {
+        let _t = Phase::start(format!("sort ({} rows)", rows.len()));
+        rows.par_sort_by(|a, b| timeline::event_order(&a.0, &b.0));
+    }
     let (sorted_timeline, row_tails): (Vec<Event>, Vec<hunt::Tail>) = rows.into_iter().unzip();
     log_message(silent, &format!("Saving timeline to: {}", output));
-    timeline::export_timeline(&sorted_timeline, &row_tails, output, silent)?;
+    {
+        let _t = Phase::start("write csv");
+        timeline::export_timeline(&sorted_timeline, &row_tails, output, silent)?;
+    }
 
     if let Some(findings) = findings {
         hunt::export_findings(&findings, &hunt_output)?;

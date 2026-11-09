@@ -1,4 +1,4 @@
-use evtx::EvtxParser;
+use evtx::{EvtxParser, ParserSettings};
 use rayon::prelude::*;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -225,16 +225,34 @@ pub fn find_evtx_files(target: &Path) -> Vec<String> {
 
 /// Parses an EVTX file and extracts relevant events
 pub fn parse_evtx(file_path: &str) -> Result<Vec<Event>, Box<dyn Error>> {
-    let mut parser = EvtxParser::from_path(file_path)?;
+    // The crate parses one chunk at a time unless told otherwise (`num_threads` defaults to
+    // 0 and its chunk loop takes `max(num_threads, 1)`): let it use rayon's pool.
+    let timing = std::env::var_os("CAAREA_TIMING").is_some();
+    let t0 = std::time::Instant::now();
+    let mut parser = EvtxParser::from_path(file_path)?.with_configuration(ParserSettings::default().num_threads(0));
+    let opened = t0.elapsed();
 
-    let events: Vec<Event> = parser
-        .records_json()
-        .par_bridge()
-        .filter_map(|record| match record {
-            Ok(record) => extract_event(&record.data),
-            Err(_) => None,
-        })
-        .collect();
+    // The crate parses and serialises its chunks on rayon's pool; consuming its iterator
+    // from a `par_bridge` would put that work under the bridge's lock and serialise it, so
+    // the iterator is drained from this thread.
+    // Records come as JSON values (no text round trip); they are turned into rows in
+    // batches on rayon's pool, in order, so the result is the same whatever the thread count.
+    let mut events: Vec<Event> = Vec::new();
+    let mut batch: Vec<Value> = Vec::with_capacity(EXTRACT_BATCH);
+    let flush = |batch: &mut Vec<Value>, events: &mut Vec<Event>| {
+        events.extend(batch.par_iter().filter_map(extract_event_value).collect::<Vec<Event>>());
+        batch.clear();
+    };
+    for record in parser.records_json_value().flatten() {
+        batch.push(record.data);
+        if batch.len() >= EXTRACT_BATCH {
+            flush(&mut batch, &mut events);
+        }
+    }
+    flush(&mut batch, &mut events);
+    if timing {
+        eprintln!("[timing]   evtx file {:<60} open {:>7.3} s, records {:>7.3} s, {} rows", Path::new(file_path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(), opened.as_secs_f64(), t0.elapsed().as_secs_f64() - opened.as_secs_f64(), events.len());
+    }
 
     Ok(events)
 }
@@ -436,6 +454,14 @@ fn nth(v: &[String], i: usize) -> String {
 /// Extracts an execution event from an EVTX record rendered as JSON by the `evtx` crate.
 pub fn extract_event(json_str: &str) -> Option<Event> {
     let parsed: Value = serde_json::from_str(json_str).ok()?;
+    extract_event_value(&parsed)
+}
+
+/// Records handed to one `par_iter` at a time while a file is read.
+const EXTRACT_BATCH: usize = 4096;
+
+/// The same, from the record already parsed as a JSON value.
+pub fn extract_event_value(parsed: &Value) -> Option<Event> {
     let system = &parsed["Event"]["System"];
 
     let event_id = scalar_u64(&system["EventID"]).unwrap_or(0);
