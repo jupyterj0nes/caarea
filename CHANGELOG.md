@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Sized from the machine: threads from the cores, waves from the memory
+
+No fixed figure anywhere (`src/threads.rs`). The pool takes every core the process may use, from `available_parallelism`, which honours affinity masks and container CPU quotas: twelve on a desktop of twelve, ninety-six on a server of ninety-six. What a big machine could overrun is memory, not CPU: an EVTX file costs five times its size while its records are in flight (measured: 10,308 KB of Security log peaks 48 MB above the baseline; 168 files of 203 MB peak 154 MB on one thread and 600 MB on twelve, about 40 MB per thread), and the parsers take one file per thread. The EVTX files and the hives of a directory are now parsed in waves: within a wave, the files that can be in flight at once (as many as threads) cost at most a budget of a quarter of the memory free at start (512 MiB at least, 2 GiB when the system does not say; the cgroup limit caps it inside a Linux container; `CAAREA_FILE_BUDGET=<bytes>` overrides). On a machine with memory to spare every directory is one wave and nothing changes; the waves cost 20 % when every file is one of its own (168 waves: 6.9 s against 4.4) and 15 % at a 300 MB budget. The console says what was decided: `Threads: 12 (12 cores; --threads changes it, 1 runs serial); memory budget 3.0 GiB for the files in flight (11.9 GiB free)`.
+
+The order does not depend on any of it: the waves are cut in file order and collected one after the other. Checked byte for byte over the two-host lab (default budget, one-byte budget, one-byte budget on one thread) and over the 168-file set and six Linux hosts (default, one-byte and 300 MB budgets). The thread policy, the waves and the console line have unit tests (161 tests in all).
+
 ## v0.4.0 (2026-11-09)
 
 ### The same bytes on one thread or twelve, and faster where it was measured to pay

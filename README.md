@@ -105,7 +105,7 @@ The rules only state what a documented source states: the expected-parent and al
 
 ## How it is tested
 
-`cargo test` runs 157 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
+`cargo test` runs 161 tests: real-layout records for every binary format, real auditd lines, the public TZif files of two zones, safety tests that try to break out of the staging folder, and the identities the clean reference is matched by. Beyond them, the parsers were checked against:
 
 - 524 public EVTX samples ([EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES), [EVTX-to-MITRE-Attack](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack), DeepBlueCLI): the count per file matches `Get-WinEvent` exactly for every supported event id.
 - The registry test corpus of [yarp](https://github.com/msuhanov/yarp): the transaction log replay (in the shared [blockcarve](https://github.com/jupyterj0nes/blockcarve) crate) gives the same hive bins as Windows 10 and Windows 7 when they recovered those dirty hives themselves.

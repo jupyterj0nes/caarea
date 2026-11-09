@@ -118,31 +118,40 @@ pub fn process_evtx_target(target: &Path, silent: bool) -> Result<Vec<Event>, Bo
                 .unwrap(),
         );
 
-        let processed_events: Vec<Vec<Event>> = evtx_files
-            .par_iter()
-            .filter_map(|file| {
-                let file_path = Path::new(file);
-                log_message(silent, &format!("Processing EVTX file: {}", file_path.display()));
-                let result = match parse_evtx(file) {
-                    Ok(mut evtx_events) => {
-                        crate::utils::stamp_source_file(&mut evtx_events, &crate::utils::source_file_name(target, file_path));
-                        evtx_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
-                        print_evtx_statistics(file_path, &evtx_events, silent);
-                        Some(evtx_events)
-                    }
-                    Err(e) => {
-                        log_message(silent, &format!("⚠️ Warning: cannot parse {}: {}", file_path.display(), e));
-                        None
-                    }
-                };
-                pb.inc(1);
-                result
-            })
-            .collect();
+        // One file per thread, in waves the memory budget allows (`threads::waves`): each wave
+        // is collected in file order and the waves follow each other, so the rows come out in
+        // the same order whatever the budget or the thread count.
+        let sizes = crate::threads::sizes_of(&evtx_files);
+        let waves = crate::threads::waves(&sizes, crate::threads::EVTX_COST_PER_BYTE, crate::threads::file_budget(), crate::threads::workers());
+        if waves.len() > 1 {
+            log_message(silent, &format!("Memory budget: {} EVTX files parsed in {} waves", evtx_files.len(), waves.len()));
+        }
+        for wave in waves {
+            let processed_events: Vec<Vec<Event>> = evtx_files[wave]
+                .par_iter()
+                .filter_map(|file| {
+                    let file_path = Path::new(file);
+                    log_message(silent, &format!("Processing EVTX file: {}", file_path.display()));
+                    let result = match parse_evtx(file) {
+                        Ok(mut evtx_events) => {
+                            crate::utils::stamp_source_file(&mut evtx_events, &crate::utils::source_file_name(target, file_path));
+                            evtx_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+                            print_evtx_statistics(file_path, &evtx_events, silent);
+                            Some(evtx_events)
+                        }
+                        Err(e) => {
+                            log_message(silent, &format!("⚠️ Warning: cannot parse {}: {}", file_path.display(), e));
+                            None
+                        }
+                    };
+                    pb.inc(1);
+                    result
+                })
+                .collect();
+            all_events.extend(processed_events.into_iter().flatten());
+        }
 
         pb.finish_and_clear();
-
-        all_events = processed_events.into_iter().flatten().collect();
     } else if target.is_file() {
         log_message(silent, &format!("Processing EVTX file: {}", target.display()));
         let mut evtx_events = parse_evtx(&target.to_string_lossy())?;

@@ -45,9 +45,21 @@ caarea [OPTIONS] --output <PATH>
 
 `--toi 2026-09-24T12:00:00Z --toi-window 6` keeps the events six hours either side of the moment of interest; `--start-time` and `--end-time` set the window by its edges. Rows outside the window are not written, but they still feed the process tree, so a parent that started before the window is still named in `parentprocessname` and still counts for the hunt's genealogy.
 
-## Threads and priority
+## Threads, memory and priority
 
-The parsers and the hunt run on one worker pool with as many threads as logical cores the process can see (`--threads N` or `RAYON_NUM_THREADS` set it by hand; `--threads 1` runs everything in series). The pool takes every core and the process runs at normal priority, as any other program does. `--priority low` drops it one step below normal, so the scheduler gives a core back the moment the console or anything else wants one; it was the default once, and measured a run starved for 10 to 73 seconds (against 1.5 to 4) whenever the antivirus was scanning the evidence or the CSV just written, so it is the option, not the default. If the case folder is excluded from real-time scanning, `low` costs 10 to 25 % under load and nothing on an idle machine. None of this changes the output: files are parsed in path order, rows are collected in that order and the timeline is sorted on a total order (time, then every event column), so the CSV is the same byte with one thread or sixty-four; a test runs the pipeline on one thread and on the pool and compares the files. `CAAREA_TIMING=1` prints the time of every phase on stderr.
+Nothing is fixed: the run is sized from the machine it finds (`src/threads.rs`), and the console says what it decided:
+
+```
+Threads: 12 (12 cores; --threads changes it, 1 runs serial); memory budget 3.0 GiB for the files in flight (11.9 GiB free)
+```
+
+**Threads.** The parsers and the hunt share one worker pool with as many threads as cores the process may use: twelve on a desktop of twelve, ninety-six on a server of ninety-six, fewer inside a container with a CPU quota or under an affinity mask. `--threads N` or `RAYON_NUM_THREADS` set it by hand; `--threads 1` runs everything in series.
+
+**Memory.** A file being parsed costs several times its size while its records are in flight (an EVTX measured five times: a 10 MB Security log peaks 48 MB above the baseline), and the parsers take one file per thread, so a server with many cores holds many files at once. The files of a directory are therefore parsed in waves: within a wave, the files that can be in flight together (as many as threads) cost at most the budget, a quarter of the memory free when the run starts (512 MiB at least; 2 GiB when the system does not say; inside a Linux container the cgroup limit caps it). On a machine with memory to spare every directory is one wave and nothing changes: 168 EVTX files of 203 MB are one wave on a 3 GiB budget and peak at 600 MB on twelve threads. With little memory the waves keep the run out of swap, at a measured cost of 20 % when every file is a wave of its own (168 waves: 6.9 s against 4.4) and 15 % with a 300 MB budget. `CAAREA_FILE_BUDGET=<bytes>` sets the budget by hand.
+
+**Priority.** The process runs at normal priority, as any other program does. `--priority low` drops it one step below normal, so the scheduler gives a core back the moment the console or anything else wants one; it was the default once, and measured a run starved for 10 to 73 seconds (against 1.5 to 4) whenever the antivirus was scanning the evidence or the CSV just written, so it is the option, not the default. If the case folder is excluded from real-time scanning, `low` costs 10 to 25 % under load and nothing on an idle machine.
+
+None of this changes the output: files are listed and sorted first, parsed in that order wave after wave, rows collected in that order, and the timeline sorted on a total order (time, then every event column), so the CSV is the same byte with one thread or ninety-six, whatever the memory. The same bytes were checked on the default budget, on a one-byte budget (one file per wave) and on one thread over the two-host lab, 168 EVTX files and six Linux hosts; a test runs the pipeline on one thread and on the pool and compares the files. `CAAREA_TIMING=1` prints the time of every phase on stderr.
 
 ## What comes back
 

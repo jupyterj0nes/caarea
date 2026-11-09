@@ -117,7 +117,7 @@ pub fn build_cli() -> Command {
                 .long("threads")
                 .value_name("N")
                 .value_parser(clap::value_parser!(usize))
-                .help("Worker threads for the parsers and the hunt (default: every logical core, or RAYON_NUM_THREADS); the CSV is the same whatever the count"),
+                .help("Worker threads for the parsers and the hunt (default: every core the process may use, or RAYON_NUM_THREADS; 1 runs serial); the CSV is the same whatever the count"),
         )
         .arg(
             Arg::new("priority")

@@ -950,28 +950,37 @@ pub fn process_registry_target_with_hint(
                 .unwrap(),
         );
 
-        let processed: Vec<Vec<Event>> = reg_files
-            .par_iter()
-            .filter_map(|file| {
-                let path = Path::new(file);
-                log_message(silent, &format!("Processing Registry hive: {}", path.display()));
-                let res = match parse_registry_file_with_defaults(path, silent, default_computer.as_deref()) {
-                    Ok(mut events) => {
-                        crate::utils::stamp_source_file(&mut events, &crate::utils::source_file_name(target, path));
-                        Some(events)
-                    }
-                    Err(e) => {
-                        log_message(silent, &format!("⚠️ Warning: cannot parse hive {}: {}", path.display(), e));
-                        None
-                    }
-                };
-                pb.inc(1);
-                res
-            })
-            .collect();
+        // One hive per thread, in the waves the memory budget allows (`threads::waves`), each
+        // collected in file order.
+        let sizes = crate::threads::sizes_of(&reg_files);
+        let waves = crate::threads::waves(&sizes, crate::threads::HIVE_COST_PER_BYTE, crate::threads::file_budget(), crate::threads::workers());
+        if waves.len() > 1 {
+            log_message(silent, &format!("Memory budget: {} hives parsed in {} waves", reg_files.len(), waves.len()));
+        }
+        for wave in waves {
+            let processed: Vec<Vec<Event>> = reg_files[wave]
+                .par_iter()
+                .filter_map(|file| {
+                    let path = Path::new(file);
+                    log_message(silent, &format!("Processing Registry hive: {}", path.display()));
+                    let res = match parse_registry_file_with_defaults(path, silent, default_computer.as_deref()) {
+                        Ok(mut events) => {
+                            crate::utils::stamp_source_file(&mut events, &crate::utils::source_file_name(target, path));
+                            Some(events)
+                        }
+                        Err(e) => {
+                            log_message(silent, &format!("⚠️ Warning: cannot parse hive {}: {}", path.display(), e));
+                            None
+                        }
+                    };
+                    pb.inc(1);
+                    res
+                })
+                .collect();
+            all_events.extend(processed.into_iter().flatten());
+        }
 
         pb.finish_and_clear();
-        all_events = processed.into_iter().flatten().collect();
     } else if target.is_file() {
         all_events = parse_registry_file_with_defaults(target, silent, hint)?;
         crate::utils::stamp_source_file(&mut all_events, &crate::utils::source_file_name(target, target));

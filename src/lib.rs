@@ -4,6 +4,7 @@ pub mod hunt;
 pub mod ingest;
 pub mod parsers;
 pub mod provenance;
+pub mod threads;
 pub mod timeline;
 pub mod utils;
 
@@ -198,12 +199,16 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     // Build CLI and parse arguments
     let matches = cli::build_cli().get_matches();
 
-    // The worker pool: every logical core unless --threads or RAYON_NUM_THREADS says otherwise.
-    // Nothing downstream depends on the count: the parsers collect in file order and the
-    // timeline is sorted on a total order, so the CSV is the same byte with 1 thread or 64.
-    if let Some(n) = matches.get_one::<usize>("threads") {
-        rayon::ThreadPoolBuilder::new().num_threads((*n).max(1)).build_global().map_err(|e| format!("cannot build the thread pool: {}", e))?;
-    }
+    // The worker pool and the memory budget, decided from the machine unless --threads or
+    // RAYON_NUM_THREADS says otherwise (`threads`). Nothing downstream depends on either: the
+    // parsers collect in file order, wave after wave, and the timeline is sorted on a total
+    // order, so the CSV is the same byte with 1 thread or 96 and whatever the memory.
+    let asked = matches
+        .get_one::<usize>("threads")
+        .copied()
+        .or_else(|| std::env::var("RAYON_NUM_THREADS").ok().and_then(|s| s.trim().parse().ok()));
+    let decision = threads::decide(asked);
+    threads::install(&decision)?;
     // Normal priority by default: a low-priority run is starved for tens of seconds while the
     // antivirus scans the evidence or the CSV just written (measured 10 to 73 s against 1.5 to
     // 4 s). `--priority low` yields the cores to whatever else the machine is doing.
@@ -234,6 +239,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     log_message(silent, &format!("CAAREA v{} - Execution Artifacts Timeliner", env!("CARGO_PKG_VERSION")));
     log_message(silent, "Extracting and analyzing execution artifacts for digital forensics and incident response (DFIR)");
+    log_message(silent, &threads::banner(&decision));
 
     // Validate inputs
     cli::validate_input(&directories, &files, output, modules, silent, overwrite)?;

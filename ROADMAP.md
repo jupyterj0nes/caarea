@@ -406,7 +406,7 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
 - **Parallelism (done, measured)**: see the CHANGELOG entry *The same bytes on one thread
   or twelve*. Done: total order and determinism test, real mtimes out of archives, the EVTX
   drain without `par_bridge`, the hunt rules per row, the Linux files per task, `par_sort`,
-  `--threads`, `--priority` (normal by default, low as the option), `CAAREA_TIMING`. Deferred: the parser families
+  `--threads`, `--priority` (normal by default, low as the option), `CAAREA_TIMING`; then `src/threads.rs`: the pool sized from the cores the process may use, the EVTX files and hives of a directory parsed in waves bounded by a memory budget (a quarter of the free memory), the decision printed on the console. Deferred: the parser families
   of one directory in parallel (saves about 1 s of 4 on a mixed triage; needs the console
   collected per family and a memory measurement on a large image). Rejected by measurement:
   several `-d` at once, image and shadow-copy extraction, carving (disk-bound, 0.26 cores).
