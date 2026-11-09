@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.1 (2026-11-09)
 
 ### Sized from the machine: threads from the cores, waves from the memory
 

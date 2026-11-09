@@ -335,8 +335,23 @@ Pending (2026-11-09):
 - **Release 0.4.0** went out on 2026-11-09 with the parallelism work and the priority default
   settled: `normal`, because a low-priority run was measured starved for 10 to 73 s behind the
   antivirus (CHANGELOG v0.4.0). `--priority low` stays as the option.
-- **Parser families of one directory in parallel** (about 1 s of 4 on the mixed lab triage):
-  needs the console collected per family and a peak-memory measurement on a large image.
+- **What is left in speed, measured on 2026-11-09** (two-host lab 3.5 s; 168 EVTX 4.3 s):
+  - *Parser families of one directory in parallel*: EVTX, registry, Windows artifacts, NTFS
+    and Linux run in series per directory; on dev-srv01 they sum 1.35 s and would take about
+    0.5 s together, 0.85 s of 3.5 (24 %). Needs the console collected per family and the
+    memory budget shared across families (`threads::waves` per family adds up).
+  - *Linux parsers over a Windows triage*: 0.43 s (12 %) walking dev-srv01 for Linux files
+    that are not there; decide by name or header before reading a file.
+  - *Archives extracted in parallel*: the two tgz take 0.93 s in series; two at once on an
+    NVMe might save 0.3 s, nothing on a spinning disk or a share.
+  - *EVTX extraction without the JSON round trip*: 80 % of the 168-file run is the evtx
+    crate's BinXML-to-JSON conversion plus our extraction from the values (about 16 MB/s per
+    large file on twelve threads). Reading the fields from the BinXML tree could give two to
+    three times on that phase; it rewrites the code that decides what a row says, so only
+    with the byte-for-byte corpus as the net, as a project of its own.
+  - Not worth it, measured: several `-d` at once, images, shadow copies and carving are
+    disk-bound (0.26 cores on the ext4 image); dedup, sort, write and the hunt rules are
+    below 0.3 s together.
 - **Clean reference and SRUM paths**: SRUM rows spell the image as
   `\Device\HarddiskVolume3\Windows\Temp\...`, which `hunt::clean` does not normalise, so
   `DismHost.exe` from SRUM stays `candidate` on a clean host.
