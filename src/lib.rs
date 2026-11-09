@@ -204,9 +204,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     if let Some(n) = matches.get_one::<usize>("threads") {
         rayon::ThreadPoolBuilder::new().num_threads((*n).max(1)).build_global().map_err(|e| format!("cannot build the thread pool: {}", e))?;
     }
-    // Low priority by default: the pool takes every core, the scheduler gives them back the
-    // moment the console, the antivirus or anything else wants one.
-    if matches.get_one::<String>("priority").map(|p| p == "low").unwrap_or(true) {
+    // Normal priority by default: a low-priority run is starved for tens of seconds while the
+    // antivirus scans the evidence or the CSV just written (measured 10 to 73 s against 1.5 to
+    // 4 s). `--priority low` yields the cores to whatever else the machine is doing.
+    if matches.get_one::<String>("priority").map(|p| p == "low").unwrap_or(false) {
         lower_process_priority();
     }
 

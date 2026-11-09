@@ -123,9 +123,9 @@ pub fn build_cli() -> Command {
             Arg::new("priority")
                 .long("priority")
                 .value_name("low|normal")
-                .default_value("low")
+                .default_value("normal")
                 .value_parser(["low", "normal"])
-                .help("Process priority: low (default) yields the CPU to whatever else the machine is doing, normal competes as an equal"),
+                .help("Process priority: normal (default) competes as an equal, low yields the CPU to whatever else the machine is doing"),
         )
 }
 

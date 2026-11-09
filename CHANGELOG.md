@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 (2026-11-09)
 
 ### The same bytes on one thread or twelve, and faster where it was measured to pay
 
@@ -14,11 +14,11 @@ Then speed, measured on a 12-core machine (`CAAREA_TIMING=1` prints the time of 
 - Deduplication and the final sort use `par_sort`; measured no change (the sort was not the cost), kept for the order guarantee.
 - Whole runs: DeepBlueCLI with `--hunt` 2.9 to 4.0 s before, 1.5 to 2.3 s after; the two-host lab 4.1 to 4.6 s before, 3.9 to 4.3 after (the tgz extraction dominates); 168 EVTX 6.7 to 7.1 s before, 5.9 to 6.0 after.
 
-The policy: the pool takes every logical core (`--threads N` or `RAYON_NUM_THREADS` to say otherwise) and the process runs one priority step below normal by default (`--priority low`; `--priority normal` competes as an equal). Measured cost of the low priority: 10 to 25 % on the 168-file set with the usual background load, nothing on small sets; when the antivirus was scanning the evidence folder for the first time, the low-priority run waited behind it (41 s against 2 s). Exclude the case folder from real-time scanning, or run with `--priority normal`.
+The policy: the pool takes every logical core (`--threads N` or `RAYON_NUM_THREADS` to say otherwise) and the process runs at normal priority (`--priority low` drops it one step below). Low was the default for a day and was measured against the previous build, five interleaved runs each, medians: DeepBlueCLI (21 EVTX) 3.46 s before, 1.44 s at normal, 1.67 s at low; the two-host lab 5.13, 3.47, 3.82; six Linux hosts 2.32, 1.30, 1.26. The bytes were the same every time, but five low-priority runs out of twenty-six took 10, 17, 38, 51 and 73 seconds while the antivirus scanned the CSV just written, and no normal-priority run did; a tool whose running time depends on what else the machine is doing is not reliable, so normal is the default and low the option. On a machine whose case folder is excluded from real-time scanning, low costs 10 to 25 % under load and nothing when idle.
+
+Verified for this release, with the binary built from the release commit: the timeline and the findings have the same SHA-256 on the default pool twice, on one thread, on two threads and at both priorities, over the two-host lab (110,563 rows), six Linux hosts and DeepBlueCLI (the findings in full and 15 of the 21 timelines file by file; the antivirus quarantines the other six before they can be read, because of the strings they carry).
 
 Not done, by measurement: the families of one directory in parallel would save about 1 s of 4 on the mixed lab triage but needs the console collected per family first (planned); several `-d` at once, image and shadow-copy extraction and carving are bound by the disk, not the CPU (0.26 cores measured on the ext4 image), and stay in series.
-
-## v0.4.0 (2026-11-05)
 
 ### XFS volumes
 

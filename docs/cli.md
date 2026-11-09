@@ -22,7 +22,7 @@ caarea [OPTIONS] --output <PATH>
       --overwrite             Replace the output file if it exists
       --threads <N>           Worker threads for the parsers and the hunt (default: every logical
                               core, or RAYON_NUM_THREADS); the CSV is the same whatever the count
-      --priority <low|normal> Process priority (default: low, yields the CPU to anything else)
+      --priority <low|normal> Process priority (default: normal; low yields the CPU to anything else)
   -s, --silent                Print nothing but errors
   -h, --help / -V, --version
 ```
@@ -47,7 +47,7 @@ caarea [OPTIONS] --output <PATH>
 
 ## Threads and priority
 
-The parsers and the hunt run on one worker pool with as many threads as logical cores the process can see (`--threads N` or `RAYON_NUM_THREADS` set it by hand; `--threads 1` runs everything in series). The pool takes every core, so by default the process runs one priority step below normal (`--priority low`): the scheduler gives a core back the moment the console, the antivirus or anything else wants one, and nothing is lost while the machine is idle. `--priority normal` competes as an equal. None of this changes the output: files are parsed in path order, rows are collected in that order and the timeline is sorted on a total order (time, then every event column), so the CSV is the same byte with one thread or sixty-four; a test runs the pipeline on one thread and on the pool and compares the files. `CAAREA_TIMING=1` prints the time of every phase on stderr.
+The parsers and the hunt run on one worker pool with as many threads as logical cores the process can see (`--threads N` or `RAYON_NUM_THREADS` set it by hand; `--threads 1` runs everything in series). The pool takes every core and the process runs at normal priority, as any other program does. `--priority low` drops it one step below normal, so the scheduler gives a core back the moment the console or anything else wants one; it was the default once, and measured a run starved for 10 to 73 seconds (against 1.5 to 4) whenever the antivirus was scanning the evidence or the CSV just written, so it is the option, not the default. If the case folder is excluded from real-time scanning, `low` costs 10 to 25 % under load and nothing on an idle machine. None of this changes the output: files are parsed in path order, rows are collected in that order and the timeline is sorted on a total order (time, then every event column), so the CSV is the same byte with one thread or sixty-four; a test runs the pipeline on one thread and on the pool and compares the files. `CAAREA_TIMING=1` prints the time of every phase on stderr.
 
 ## What comes back
 

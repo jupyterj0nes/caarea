@@ -331,15 +331,10 @@ pre-Windows 10 4688). Validated on DEV-SRV01 (Security.evtx, 129 4688 rows: the 
 task and service found, nothing else flagged) and LEO-LNX01 (165 of 237 execve rows
 resolved to a named parent, 0 findings on a clean host).
 
-Pending (2026-11-09), where this stopped:
-- **Release 0.4.0**: `Cargo.toml` and the CHANGELOG are at 0.4.0 but the tag `v0.4.0` exists
-  only locally, on `1849021` (before the parallelism work); move it to the head and push it
-  (`git tag -f -a v0.4.0 && git push origin v0.4.0`) when the version is to go out, or fold
-  the *Unreleased* section into it first.
-- **Default priority**: `--priority low` is the default by decision; measured cost 10 to 25 %
-  on a large set with background load, and a run starved behind the antivirus's first scan of
-  the evidence (41 s against 2 s). Reconsider `normal` as the default, or keep `low` and say
-  in the README that the case folder must be excluded from real-time scanning.
+Pending (2026-11-09):
+- **Release 0.4.0** went out on 2026-11-09 with the parallelism work and the priority default
+  settled: `normal`, because a low-priority run was measured starved for 10 to 73 s behind the
+  antivirus (CHANGELOG v0.4.0). `--priority low` stays as the option.
 - **Parser families of one directory in parallel** (about 1 s of 4 on the mixed lab triage):
   needs the console collected per family and a peak-memory measurement on a large image.
 - **Clean reference and SRUM paths**: SRUM rows spell the image as
@@ -411,7 +406,7 @@ arXiv 2008.04676) for the local-prevalence idea of H4.
 - **Parallelism (done, measured)**: see the CHANGELOG entry *The same bytes on one thread
   or twelve*. Done: total order and determinism test, real mtimes out of archives, the EVTX
   drain without `par_bridge`, the hunt rules per row, the Linux files per task, `par_sort`,
-  `--threads`, `--priority` (low by default), `CAAREA_TIMING`. Deferred: the parser families
+  `--threads`, `--priority` (normal by default, low as the option), `CAAREA_TIMING`. Deferred: the parser families
   of one directory in parallel (saves about 1 s of 4 on a mixed triage; needs the console
   collected per family and a memory measurement on a large image). Rejected by measurement:
   several `-d` at once, image and shadow-copy extraction, carving (disk-bound, 0.26 cores).
