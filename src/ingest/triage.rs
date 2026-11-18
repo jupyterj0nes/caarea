@@ -6,6 +6,9 @@ pub enum TriageType {
     Kape,
     Velociraptor,
     CortexXdr,
+    /// The forensic triage Cortex XDR runs from its console and offers for
+    /// download ("online"), as opposed to the offline collector's package.
+    CortexXdrOnline,
     CyLROrLive,
     Uac,
     Generic,
@@ -17,6 +20,7 @@ impl TriageType {
             Self::Kape => "KAPE",
             Self::Velociraptor => "Velociraptor",
             Self::CortexXdr => "Cortex XDR",
+            Self::CortexXdrOnline => "Cortex XDR online triage",
             Self::CyLROrLive => "CyLR",
             Self::Uac => "UAC",
             Self::Generic => "Generic Triage",
@@ -60,6 +64,45 @@ fn is_velociraptor_path(path: &str) -> bool {
     lower.contains("/velociraptor/")
 }
 
+/// Tables the Cortex XDR online triage writes as `<name>/<file>.csv`. They
+/// are what tells one of its packages from any other zip of folders when it
+/// brought no raw files along.
+const CORTEX_ONLINE_TABLES: &[&str] = &[
+    "process_listing", "netstat", "bodyfile", "lsof", "uname", "mount", "env", "systemctl", "systemd", "history",
+    "auditd", "sudo_log", "syslog", "lastb", "known_hosts", "authorized_keys", "modinfo", "ufw", "etc", "config",
+];
+
+/// `<collector>/<collector>_<32 hex>_<32 hex>.zip`: the raw files one
+/// collector of the Cortex XDR online triage brought, with their manifest.
+pub fn is_cortex_online_collector_zip(entry: &str) -> bool {
+    let norm = entry.replace('\\', "/");
+    let mut parts = norm.trim_start_matches("./").split('/');
+    let (Some(dir), Some(file), None) = (parts.next(), parts.next(), parts.next()) else { return false };
+    let Some(rest) = file.strip_suffix(".zip").and_then(|f| f.strip_prefix(dir)) else { return false };
+    let ids: Vec<&str> = rest.split('_').collect();
+    // "", <investigation id>, <collection id>
+    ids.len() == 3 && ids[0].is_empty() && ids[1..].iter().all(|i| i.len() == 32 && i.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// The package Cortex XDR offers for download after an online triage: one
+/// folder per collector at the top, holding either a table (`.csv`) or the
+/// collector's raw files in a zip named after it.
+pub fn is_cortex_online_layout(entries: &[String]) -> bool {
+    let collectors = entries.iter().filter(|n| is_cortex_online_collector_zip(n)).count();
+    let tables = entries
+        .iter()
+        .filter(|n| {
+            let norm = n.replace('\\', "/");
+            let mut parts = norm.trim_start_matches("./").split('/');
+            match (parts.next(), parts.next(), parts.next()) {
+                (Some(dir), Some(file), None) => file.ends_with(".csv") && CORTEX_ONLINE_TABLES.contains(&dir),
+                _ => false,
+            }
+        })
+        .count();
+    collectors >= 2 || (collectors >= 1 && tables >= 2) || tables >= 5
+}
+
 /// Detects what kind of triage package an archive is, based on its entry names and path
 pub fn detect_triage_type(archive_path: &str, entries: &[String]) -> Option<TriageType> {
     // 1. UAC (Unix-like Artifacts Collector)
@@ -89,6 +132,11 @@ pub fn detect_triage_type(archive_path: &str, entries: &[String]) -> Option<Tria
     let has_outer_payload = entries.iter().any(|n| n.to_lowercase() == "output/cortex-xdr-payload.log");
     if has_outer_manifest && has_outer_payload {
         return Some(TriageType::CortexXdr);
+    }
+
+    // 2b. Cortex XDR online triage (downloaded from the console)
+    if is_cortex_online_layout(entries) {
+        return Some(TriageType::CortexXdrOnline);
     }
 
     // 3. Velociraptor
@@ -173,6 +221,9 @@ pub fn extract_triage_hostname(archive_path: &str, kind: TriageType) -> Option<S
             }
             None
         }
+        // the name of the download says nothing reliable: the host is read
+        // from the package's own tables (archive::cortex_online_hostname)
+        TriageType::CortexXdrOnline => None,
         TriageType::Velociraptor => {
             // Collection-<HOST>-<TIMESTAMP>
             if let Some(rest) = stem.strip_prefix("Collection-") {
@@ -243,6 +294,32 @@ mod tests {
 
         let host = extract_triage_hostname("offline_collector_output_WEBSERV01_2026-04-06_12-00-00.zip", TriageType::CortexXdr);
         assert_eq!(host, Some("WEBSERV01".to_string()));
+    }
+
+    #[test]
+    fn test_triage_detect_cortex_xdr_online() {
+        let id = "0123456789abcdef0123456789abcdef";
+        let entries = vec![
+            "process_listing/process_listing_linux.csv".to_string(),
+            "netstat/netstat.csv".to_string(),
+            format!("auth_logs/auth_logs_{id}_{id}.zip"),
+            format!("bash_history_all_users/bash_history_all_users_{id}_{id}.zip"),
+        ];
+        assert_eq!(detect_triage_type("websrv01.zip", &entries), Some(TriageType::CortexXdrOnline));
+        assert_eq!(extract_triage_hostname("websrv01_2026.zip", TriageType::CortexXdrOnline), None);
+        assert!(is_cortex_online_collector_zip(&format!("auth_logs/auth_logs_{id}_{id}.zip")));
+        assert!(is_cortex_online_collector_zip(&format!("auth_logs\\auth_logs_{id}_{id}.zip")));
+        // another folder's name, a short id, a deeper path
+        assert!(!is_cortex_online_collector_zip(&format!("auth_logs/cron_files_{id}_{id}.zip")));
+        assert!(!is_cortex_online_collector_zip("auth_logs/auth_logs_0123_4567.zip"));
+        assert!(!is_cortex_online_collector_zip(&format!("a/auth_logs/auth_logs_{id}_{id}.zip")));
+        // a zip of somebody's spreadsheets is not one, nor one collector zip alone
+        let other: Vec<String> = ["sales/2026.csv", "sales/2025.csv", "hr/people.csv", "it/assets.csv", "it/users.csv"].iter().map(|s| s.to_string()).collect();
+        assert!(!is_cortex_online_layout(&other));
+        assert!(!is_cortex_online_layout(&[format!("cron_files/cron_files_{id}_{id}.zip")]));
+        // the offline collector's package is a different thing
+        let offline = vec!["output/manifest.json".to_string(), "output/cortex-xdr-payload.log".to_string()];
+        assert_eq!(detect_triage_type("offline_collector_output_H_2026-04-06_12-00-00.zip", &offline), Some(TriageType::CortexXdr));
     }
 
     #[test]

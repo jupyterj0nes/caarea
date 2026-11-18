@@ -247,12 +247,229 @@ pub fn read_zip_top_entries(zip_path: &Path) -> Option<Vec<String>> {
     Some(names)
 }
 
+/// One record of a CSV stream (RFC 4180: quoted fields, `""` for a quote, a
+/// line break inside quotes). `Ok(false)` at the end of the stream.
+fn read_csv_record<R: io::BufRead>(reader: &mut R, fields: &mut Vec<String>) -> io::Result<bool> {
+    fields.clear();
+    let mut raw: Vec<u8> = Vec::new();
+    loop {
+        if reader.read_until(b'\n', &mut raw)? == 0 {
+            if raw.is_empty() {
+                return Ok(false);
+            }
+            break;
+        }
+        // a record ends at a line break outside quotes: an even number of them so far
+        if raw.iter().filter(|b| **b == b'"').count() % 2 == 0 {
+            break;
+        }
+    }
+    while matches!(raw.last(), Some(b'\n') | Some(b'\r')) {
+        raw.pop();
+    }
+    let text = String::from_utf8_lossy(&raw);
+    let mut field = String::new();
+    let mut quoted = false;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (c, quoted) {
+            ('"', true) if chars.peek() == Some(&'"') => {
+                chars.next();
+                field.push('"');
+            }
+            ('"', _) => quoted = !quoted,
+            (',', false) => fields.push(std::mem::take(&mut field)),
+            _ => field.push(c),
+        }
+    }
+    fields.push(field);
+    Ok(true)
+}
+
+/// The host a Cortex XDR online triage was taken from: the `host_name` column
+/// its tables all carry, read from the smallest table that has a row.
+pub fn cortex_online_hostname(zip_path: &Path) -> Option<String> {
+    let file = File::open(zip_path).ok()?;
+    let mut archive = ZipArchive::new(file).ok()?;
+    let mut tables: Vec<(u64, usize)> = Vec::new();
+    for i in 0..archive.len() {
+        if let Ok(e) = archive.by_index_raw(i) {
+            if e.name().to_lowercase().ends_with(".csv") && e.size() > 0 {
+                tables.push((e.size(), i));
+            }
+        }
+    }
+    tables.sort(); // the small ones first: one row is all that is needed
+    let mut fields = Vec::new();
+    for (_, i) in tables {
+        let Ok(entry) = archive.by_index(i) else { continue };
+        let mut reader = io::BufReader::new(entry);
+        if !read_csv_record(&mut reader, &mut fields).unwrap_or(false) {
+            continue;
+        }
+        let Some(col) = fields.iter().position(|c| c.trim() == "host_name") else { continue };
+        if read_csv_record(&mut reader, &mut fields).unwrap_or(false) {
+            if let Some(host) = fields.get(col).map(|h| h.trim()).filter(|h| !h.is_empty()) {
+                return Some(host.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// A path as it was on the host, made relative and harmless: no drive colon,
+/// no `..`, no empty or `.` component. `None` when nothing is left.
+fn host_path_to_relative(path: &str) -> Option<PathBuf> {
+    let mut out = PathBuf::new();
+    for comp in path.replace('\\', "/").split('/') {
+        if comp.is_empty() || comp == "." || comp == ".." {
+            continue;
+        }
+        out.push(comp.replace([':', '*', '?', '"', '<', '>', '|'], "_"));
+    }
+    if out.as_os_str().is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
+/// Modification times of the host's files as the triage's own listing gives
+/// them (`bodyfile/bodyfile.csv`: `name`, `mtime` in milliseconds). The
+/// collectors' zips carry no times, so without this every file would be dated
+/// at the moment it was unpacked.
+fn cortex_online_mtimes<R: Read + io::Seek>(archive: &mut ZipArchive<R>) -> std::collections::HashMap<String, u64> {
+    let mut out = std::collections::HashMap::new();
+    let idx = (0..archive.len()).find(|&i| archive.by_index_raw(i).map(|e| e.name().replace('\\', "/").eq_ignore_ascii_case("bodyfile/bodyfile.csv")).unwrap_or(false));
+    let Some(idx) = idx else { return out };
+    let Ok(entry) = archive.by_index(idx) else { return out };
+    let mut reader = io::BufReader::new(entry);
+    let mut fields = Vec::new();
+    if !read_csv_record(&mut reader, &mut fields).unwrap_or(false) {
+        return out;
+    }
+    let (Some(name), Some(mtime)) = (fields.iter().position(|c| c.trim() == "name"), fields.iter().position(|c| c.trim() == "mtime")) else { return out };
+    while read_csv_record(&mut reader, &mut fields).unwrap_or(false) {
+        if let (Some(n), Some(Ok(ms))) = (fields.get(name), fields.get(mtime).map(|m| m.trim().parse::<u64>())) {
+            if ms > 0 {
+                out.insert(n.clone(), ms);
+            }
+        }
+    }
+    out
+}
+
+/// Unpacks a Cortex XDR online triage into `target_dir` as the tree of the
+/// host. Every collector zip (`<collector>/<collector>_<id>_<id>.zip`) has a
+/// `manifest.json` whose `entries[].files[]` give, for each file, its `path`
+/// on the host and its `archivedPath` inside the zip; each relevant file is
+/// written at `target_dir/<path>`, with the modification time the triage's
+/// listing has for it. A file the manifest does not name stays under
+/// `<collector>/`. Returns (files put back at their path, files kept under
+/// their collector).
+pub fn unpack_cortex_online(zip_path: &Path, target_dir: &Path, silent: bool) -> Result<(usize, usize), Box<dyn std::error::Error>> {
+    let file = File::open(zip_path)?;
+    let mut archive = ZipArchive::new(file)?;
+    let mtimes = cortex_online_mtimes(&mut archive);
+    let (mut placed, mut loose) = (0usize, 0usize);
+
+    for i in 0..archive.len() {
+        let (name, bytes) = {
+            let Ok(mut entry) = archive.by_index(i) else { continue };
+            let name = entry.name().replace('\\', "/");
+            if !crate::ingest::triage::is_cortex_online_collector_zip(&name) {
+                continue;
+            }
+            let mut bytes = Vec::with_capacity(entry.size() as usize);
+            if entry.read_to_end(&mut bytes).is_err() {
+                log_message(silent, &format!("⚠️ Warning: cannot read collector archive {name}"));
+                continue;
+            }
+            (name, bytes)
+        };
+        let collector = name.split('/').next().unwrap_or("collector").to_string();
+        let mut inner = match ZipArchive::new(io::Cursor::new(bytes)) {
+            Ok(a) => a,
+            Err(e) => {
+                log_message(silent, &format!("⚠️ Warning: collector archive {name} is not a readable zip: {e}"));
+                continue;
+            }
+        };
+
+        // archivedPath -> path on the host
+        let mut where_it_was: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let manifest: Option<serde_json::Value> = inner.by_name("manifest.json").ok().and_then(|m| serde_json::from_reader(m).ok());
+        match &manifest {
+            Some(m) => {
+                for entry in m.get("entries").and_then(|e| e.as_array()).into_iter().flatten() {
+                    for f in entry.get("files").and_then(|f| f.as_array()).into_iter().flatten() {
+                        if let (Some(p), Some(a)) = (f.get("path").and_then(|v| v.as_str()), f.get("archivedPath").and_then(|v| v.as_str())) {
+                            where_it_was.insert(a.replace('\\', "/"), p.to_string());
+                        }
+                    }
+                }
+            }
+            None => log_message(silent, &format!("⚠️ Warning: {name} has no readable manifest.json: its files keep their collector's folder, not their path on the host")),
+        }
+
+        for j in 0..inner.len() {
+            let Ok(mut f) = inner.by_index(j) else { continue };
+            if f.is_dir() {
+                continue;
+            }
+            let archived = f.name().replace('\\', "/");
+            // the collector's own report of the run, not files of the host
+            if matches!(archived.as_str(), "manifest.json" | "stdout.txt" | "stderr.txt" | "script_output.txt") {
+                continue;
+            }
+            let host_path = where_it_was.get(&archived).cloned();
+            let judged_as = host_path.clone().unwrap_or_else(|| format!("{collector}/{archived}"));
+            let Some(relative) = host_path_to_relative(&judged_as) else { continue };
+            if !is_relevant_artifact(&judged_as) {
+                continue;
+            }
+            let out_path = target_dir.join(relative);
+            if let Some(parent) = out_path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let Ok(mut out_file) = File::create(&out_path) else { continue };
+            if io::copy(&mut f, &mut out_file).is_err() {
+                continue;
+            }
+            // on a usr-merged system /lib, /bin and /sbin are /usr/lib, /usr/bin and
+            // /usr/sbin: the listing names a file one way and the collector the other
+            let listed = host_path.as_ref().and_then(|p| {
+                mtimes.get(p).or_else(|| match p.strip_prefix("/usr") {
+                    Some(short) if ["/lib/", "/lib64/", "/bin/", "/sbin/"].iter().any(|d| short.starts_with(d)) => mtimes.get(short),
+                    Some(_) => None,
+                    None if ["/lib/", "/lib64/", "/bin/", "/sbin/"].iter().any(|d| p.starts_with(d)) => mtimes.get(&format!("/usr{p}")),
+                    None => None,
+                })
+            });
+            if let Some(ms) = listed {
+                let _ = out_file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_millis(*ms));
+            }
+            if host_path.is_some() {
+                placed += 1
+            } else {
+                loose += 1
+            }
+        }
+    }
+    Ok((placed, loose))
+}
+
 /// Inspects an archive to detect triage package type and hostname
 pub fn inspect_triage_archive(path: &Path) -> Option<TriageInfo> {
     let path_str = path.to_string_lossy().to_string();
     let entries = read_zip_top_entries(path).unwrap_or_default();
     let kind = detect_triage_type(&path_str, &entries).unwrap_or(TriageType::Generic);
-    let hostname = extract_triage_hostname(&path_str, kind);
+    let hostname = if kind == TriageType::CortexXdrOnline {
+        // the host as the agent reported it; the name of the download is the fallback
+        cortex_online_hostname(path).or_else(|| path.file_stem().map(|s| s.to_string_lossy().to_string()))
+    } else {
+        extract_triage_hostname(&path_str, kind)
+    };
 
     Some(TriageInfo {
         kind,
@@ -290,6 +507,22 @@ fn unpack_archive_at_depth(
     let path_str = archive_path.to_string_lossy().to_lowercase();
 
     if path_str.ends_with(".zip") {
+        // A Cortex XDR online triage keeps each collector's files in a zip of
+        // its own, under made-up names (`entry_1_0/auth.log`); its manifest
+        // says where each one was. The package is rebuilt as the tree of the
+        // host, one evidence root, and nothing is left to unpack after that.
+        let entries = read_zip_top_entries(archive_path).unwrap_or_default();
+        if crate::ingest::triage::is_cortex_online_layout(&entries) {
+            let (placed, loose) = unpack_cortex_online(archive_path, &target_dir, silent)?;
+            log_message(
+                silent,
+                &format!(
+                    "📦 Cortex XDR online triage: {placed} file(s) put back at their path on the host{}",
+                    if loose > 0 { format!(", {loose} with no manifest entry kept under their collector") } else { String::new() }
+                ),
+            );
+            return Ok(vec![target_dir]);
+        }
         unpack_zip(archive_path, &target_dir, silent)?;
     } else if path_str.ends_with(".tar.gz") || path_str.ends_with(".tgz") {
         unpack_tar_gz(archive_path, &target_dir, silent)?;

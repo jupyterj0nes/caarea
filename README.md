@@ -47,7 +47,7 @@ cargo build --release          # binary in target/release/caarea[.exe]
 | :--- | :--- |
 | A disk image (E01, Ex01, raw, dd) or a virtual disk (VMDK, VHD, VHDX) | `caarea -f disk.E01 -o out.csv` |
 | A running Windows host (triage in place, as administrator) | `caarea -f \\.\C: -o out.csv --stage-dir D:\case\extracted` |
-| Triage packages (KAPE, Velociraptor, UAC, Cortex XDR, CyLR), zipped or not | `caarea -d /path/to/packages -o out.csv` |
+| Triage packages (KAPE, Velociraptor, UAC, Cortex XDR offline collector and online triage, CyLR), zipped or not | `caarea -d /path/to/packages -o out.csv` |
 | A folder you collected by hand (`winevt\Logs`, `/var/log`, ...) | `caarea -d /path/to/folder -o out.csv` |
 | Single files (an EVTX, a hive, an `audit.log`) | `caarea -f Security.evtx -f SYSTEM -f audit.log -o out.csv` |
 | The six hours around the moment of interest | `caarea -d triage -o out.csv --toi 2026-09-24T12:00:00Z --toi-window 6` |
