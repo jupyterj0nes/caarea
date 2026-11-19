@@ -378,6 +378,24 @@ pub fn process_linux_file_tz(path: &Path, hostname: &str, tz: &HostTimezone) -> 
     Vec::new()
 }
 
+/// At the root of a staged evidence tree: the files (one per line, relative
+/// to the root, forward slashes) whose modification time on the host is not
+/// known, because the package they came in carries none for them. The time
+/// such a file has on disk is the moment it was unpacked.
+pub const UNDATED_MARKER: &str = ".caarea_undated";
+
+/// Empties the time of the events that were dated by the file's own
+/// modification time when that time is not the host's (see
+/// [`UNDATED_MARKER`]). An event with a time of its own, a log line's, keeps it.
+fn blank_unpack_time(events: &mut [Event], path: &Path) {
+    let Some(unpacked) = fs::metadata(path).ok().and_then(|m| m.modified().ok()).map(crate::utils::systemtime_to_iso) else { return };
+    for e in events.iter_mut() {
+        if e.timestamp == unpacked {
+            e.timestamp.clear();
+        }
+    }
+}
+
 /// Main entry point for processing Linux execution artifacts (UAC triages or root filesystems)
 pub fn process_linux_target(target: &Path, silent: bool) -> Result<Vec<Event>, Box<dyn Error>> {
     process_linux_target_with_hint(target, silent, None, None)
@@ -410,12 +428,24 @@ pub fn process_linux_target_with_hint(
     // The files are listed first and sorted, then parsed one per task; `collect` keeps the
     // list order, so the timeline does not depend on the thread count or on how the file
     // system enumerates a directory.
-    let mut paths: Vec<std::path::PathBuf> = WalkDir::new(target).into_iter().flatten().filter(|e| e.path().is_file()).map(|e| e.into_path()).collect();
+    let mut paths: Vec<std::path::PathBuf> = WalkDir::new(target)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.path().is_file() && e.file_name() != UNDATED_MARKER)
+        .map(|e| e.into_path())
+        .collect();
     paths.sort();
+    let undated: HashSet<String> = fs::read_to_string(target.join(UNDATED_MARKER)).map(|l| l.lines().map(str::to_string).collect()).unwrap_or_default();
     let per_file: Vec<Vec<Event>> = paths
         .par_iter()
         .map(|path| {
             let mut file_events = process_linux_file_tz(path, &hostname, &tz);
+            if !undated.is_empty() {
+                let relative = path.strip_prefix(target).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+                if undated.contains(&relative) {
+                    blank_unpack_time(&mut file_events, path);
+                }
+            }
             crate::utils::stamp_source_file(&mut file_events, &crate::utils::source_file_name(target, path));
             file_events
         })
@@ -455,6 +485,47 @@ pub fn process_linux_target_with_hint(
 
 #[cfg(test)]
 mod tests {
+    /// A staged tree whose marker names one file as undated: the unit dated by that file's
+    /// own time comes out with no time; the one whose file has a known time keeps it, and so
+    /// does an event with a time of its own.
+    #[test]
+    fn an_event_dated_by_an_unpacked_file_carries_no_time() {
+        let root = std::env::temp_dir().join(format!("caarea_undated_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let units = root.join("etc").join("systemd").join("system");
+        fs::create_dir_all(&units).unwrap();
+        let unit = "[Unit]
+Description=x
+[Service]
+ExecStart=/opt/x/run.sh
+[Install]
+WantedBy=multi-user.target
+";
+        fs::write(units.join("undated.service"), unit).unwrap();
+        fs::write(units.join("dated.service"), unit.replace("/opt/x/", "/opt/y/")).unwrap();
+        let known = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_709_294_400); // 2024-03-01T12:00:00Z
+        fs::OpenOptions::new().write(true).open(units.join("dated.service")).unwrap().set_modified(known).unwrap();
+        fs::write(root.join(UNDATED_MARKER), "etc/systemd/system/undated.service").unwrap();
+
+        let events = process_linux_target_with_hint(&root, true, Some("websrv01"), None).unwrap();
+        let of = |needle: &str| events.iter().filter(|e| e.commandline.as_deref().unwrap_or("").contains(needle) || e.processname.contains(needle)).collect::<Vec<_>>();
+        let (undated, dated) = (of("/opt/x/"), of("/opt/y/"));
+        assert!(!undated.is_empty() && !dated.is_empty(), "{:?}", events.iter().map(|e| (&e.artifact, &e.processname, &e.commandline)).collect::<Vec<_>>());
+        assert!(undated.iter().all(|e| e.timestamp.is_empty()), "{:?}", undated.iter().map(|e| &e.timestamp).collect::<Vec<_>>());
+        assert!(dated.iter().all(|e| e.timestamp.starts_with("2024-03-01T12:00:00")), "{:?}", dated.iter().map(|e| &e.timestamp).collect::<Vec<_>>());
+        // the marker itself is not evidence
+        assert!(events.iter().all(|e| !e.source_file.contains(UNDATED_MARKER)));
+
+        // an event with a time of its own keeps it, whatever the file's time
+        let log = root.join("x.log");
+        fs::write(&log, "x").unwrap();
+        let mut own = vec![events[0].clone()];
+        own[0].timestamp = "2026-11-05T13:37:28.027709Z".to_string();
+        blank_unpack_time(&mut own, &log);
+        assert_eq!(own[0].timestamp, "2026-11-05T13:37:28.027709Z");
+        let _ = fs::remove_dir_all(&root);
+    }
+
     use super::*;
 
     #[test]

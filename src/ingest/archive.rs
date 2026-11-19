@@ -372,6 +372,9 @@ pub fn unpack_cortex_online(zip_path: &Path, target_dir: &Path, silent: bool) ->
     let mut archive = ZipArchive::new(file)?;
     let mtimes = cortex_online_mtimes(&mut archive);
     let (mut placed, mut loose) = (0usize, 0usize);
+    // files whose time on the host is not known: the collectors' zips carry
+    // none, and the listing does not name them
+    let mut undated: Vec<String> = Vec::new();
 
     for i in 0..archive.len() {
         let (name, bytes) = {
@@ -428,6 +431,7 @@ pub fn unpack_cortex_online(zip_path: &Path, target_dir: &Path, silent: bool) ->
             if !is_relevant_artifact(&judged_as) {
                 continue;
             }
+            let as_staged = relative.to_string_lossy().replace('\\', "/");
             let out_path = target_dir.join(relative);
             if let Some(parent) = out_path.parent() {
                 let _ = fs::create_dir_all(parent);
@@ -446,8 +450,13 @@ pub fn unpack_cortex_online(zip_path: &Path, target_dir: &Path, silent: bool) ->
                     None => None,
                 })
             });
-            if let Some(ms) = listed {
-                let _ = out_file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_millis(*ms));
+            match listed {
+                Some(ms) => {
+                    let _ = out_file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_millis(*ms));
+                }
+                // its time on disk is the moment of this unpacking, which says
+                // nothing about the host: an event dated by it will carry no time
+                None => undated.push(as_staged),
             }
             if host_path.is_some() {
                 placed += 1
@@ -455,6 +464,9 @@ pub fn unpack_cortex_online(zip_path: &Path, target_dir: &Path, silent: bool) ->
                 loose += 1
             }
         }
+    }
+    if !undated.is_empty() {
+        let _ = fs::write(target_dir.join(crate::parsers::linux::UNDATED_MARKER), undated.join("\n"));
     }
     Ok((placed, loose))
 }
