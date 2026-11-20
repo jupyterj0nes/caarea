@@ -51,7 +51,13 @@ pub fn open_source(path: &Path) -> Result<Box<dyn BlockSource>, String> {
         let (reader, size) = crate::ingest::live::open_live_volume(&label)?;
         return Ok(Box::new(DirectSource::new(reader, size, label)));
     }
-    if lower.ends_with(".e01") || lower.ends_with(".ex01") {
+    // a device has no length to sniff; anything else opens by what it holds
+    let kind = if lower.starts_with(r"\\.\") || lower.starts_with("/dev/") {
+        crate::ingest::image::ImageKind::Raw
+    } else {
+        crate::ingest::image::image_kind(path)
+    };
+    if kind == crate::ingest::image::ImageKind::Ewf {
         let reader = ewf::EwfReader::open(path).map_err(|e| fail(e.to_string()))?;
         let size = reader.total_size();
         let reopen_path = path.to_path_buf();
@@ -60,12 +66,12 @@ pub fn open_source(path: &Path) -> Result<Box<dyn BlockSource>, String> {
         });
         return Ok(Box::new(src));
     }
-    if lower.ends_with(".vmdk") {
+    if kind == crate::ingest::image::ImageKind::Vmdk {
         let reader = crate::ingest::vmdk::VmdkReader::open(&label).map_err(fail)?;
         let size = reader.total_size();
         return Ok(Box::new(DirectSource::new(reader, size, label)));
     }
-    if lower.ends_with(".vhd") || lower.ends_with(".vhdx") {
+    if kind == crate::ingest::image::ImageKind::Vhd {
         let (reader, size) = crate::ingest::vhd::open_virtual_disk(&label).map_err(fail)?;
         return Ok(Box::new(DirectSource::new(reader, size, label)));
     }

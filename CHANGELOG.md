@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.2 (2026-11-20)
+
+### A disk image is recognised by its content, not only by its name
+
+A cloud snapshot with no extension (an Azure OS disk export, `snap-<host>_os_disk-<date>`) gave `No parser recognised file` and an empty timeline. A file whose name is not an image's is now opened as one when its first 4 KiB or its last 512 bytes say so: EWF, VHD (footer at the start or, fixed, at the end), VHDX and VMDK sparse by their magic; a raw disk or volume by its GPT header, an MBR with a valid partition entry, an NTFS boot sector, an ext or XFS superblock or an LVM label. Files under 64 KiB, hives, event logs and later EWF segments (`.E02`..., which start with the same magic) are never taken for one. The content also chooses the reader, in the image pipeline and in `--carve`: a fixed VHD named `.dd` is read as a VHD, a raw disk named `.vhd` as raw, a VHDX by its magic whatever its name. Tests: `tests/image_sniff.rs` (signatures, the lab's XFS images with no extension, as a fixed VHD with no extension and as a raw disk named `.vhd`, the files that must not match, and the binary end to end).
+
+### Cortex XDR online triage packages recognised and rebuilt as the tree of the host
+
+The zip the console offers after a triage (one folder per collector, raw files under made-up names, `manifest.json` saying where each was) was read as a generic archive: the events of one package spread over three computer names and whatever is known by its path was not found. Each file is now put back at its real path, with the modification time the triage's own listing (`bodyfile.csv`) has for it, and the package is one evidence root under the host its tables name. An event dated by a file the listing does not name carries no time, not the moment the file was unpacked; an event with a time of its own keeps it. On a real package: 331 events under 3 computers before, 595 under 1 after. Tested on Linux packages.
+
 ## v0.4.1 (2026-11-09)
 
 ### Sized from the machine: threads from the cores, waves from the memory

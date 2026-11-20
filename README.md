@@ -46,6 +46,7 @@ cargo build --release          # binary in target/release/caarea[.exe]
 | You have | Run |
 | :--- | :--- |
 | A disk image (E01, Ex01, raw, dd) or a virtual disk (VMDK, VHD, VHDX) | `caarea -f disk.E01 -o out.csv` |
+| A cloud snapshot with no extension (an Azure OS disk export): recognised by its content | `caarea -f snap-HOST_os_disk-20261116 -o out.csv` |
 | A running Windows host (triage in place, as administrator) | `caarea -f \\.\C: -o out.csv --stage-dir D:\case\extracted` |
 | Triage packages (KAPE, Velociraptor, UAC, Cortex XDR offline collector and online triage, CyLR), zipped or not | `caarea -d /path/to/packages -o out.csv` |
 | A folder you collected by hand (`winevt\Logs`, `/var/log`, ...) | `caarea -d /path/to/folder -o out.csv` |
