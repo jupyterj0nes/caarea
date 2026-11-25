@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.3 (2026-11-25)
 
 ### QCOW2 disk images are read
 
