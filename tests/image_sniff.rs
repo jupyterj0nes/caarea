@@ -66,6 +66,7 @@ fn container_formats_by_their_magic() {
     assert_eq!(image_kind_from_bytes(&head_with(0, b"EVF\x09\x0d\x0a\xff\x00"), &tail), Some(ImageKind::Ewf));
     assert_eq!(image_kind_from_bytes(&head_with(0, b"EVF2\x0d\x0a\x81\x00"), &tail), Some(ImageKind::Ewf));
     assert_eq!(image_kind_from_bytes(&head_with(0, b"vhdxfile"), &tail), Some(ImageKind::Vhd));
+    assert_eq!(image_kind_from_bytes(&head_with(0, b"QFI\xfb"), &tail), Some(ImageKind::Vhd));
     assert_eq!(image_kind_from_bytes(&head_with(0, b"conectix"), &tail), Some(ImageKind::Vhd));
     assert_eq!(image_kind_from_bytes(&head_with(0, b"KDMV"), &tail), Some(ImageKind::Vmdk));
     let mut fixed_tail = [0u8; 512];

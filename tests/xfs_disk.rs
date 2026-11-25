@@ -34,9 +34,52 @@ fn staged_volume(live_dir: &Path) -> PathBuf {
     found.remove(0)
 }
 
+/// A raw disk as a QCOW2 (version 3, 64 KiB clusters, clusters of zeros left out), under
+/// another name: what `qemu-img convert -O qcow2` writes, in its plainest form.
+fn as_qcow2(raw_path: &Path, name: &str) -> PathBuf {
+    let raw = std::fs::read(raw_path).unwrap();
+    let cs = 65536usize;
+    let clusters = raw.len().div_ceil(cs);
+    let tables = clusters.div_ceil(cs / 8);
+    let mut img = vec![0u8; cs * (2 + tables)];
+    img[..4].copy_from_slice(b"QFI\xfb");
+    img[4..8].copy_from_slice(&3u32.to_be_bytes());
+    img[20..24].copy_from_slice(&16u32.to_be_bytes());
+    img[24..32].copy_from_slice(&(raw.len() as u64).to_be_bytes());
+    img[36..40].copy_from_slice(&(tables as u32).to_be_bytes());
+    img[40..48].copy_from_slice(&(cs as u64).to_be_bytes());
+    img[96..100].copy_from_slice(&4u32.to_be_bytes());
+    img[100..104].copy_from_slice(&104u32.to_be_bytes());
+    for t in 0..tables {
+        img[cs + t * 8..cs + t * 8 + 8].copy_from_slice(&((cs * (2 + t)) as u64).to_be_bytes());
+    }
+    for (i, chunk) in raw.chunks(cs).enumerate() {
+        if chunk.iter().all(|&b| b == 0) {
+            continue;
+        }
+        let at = img.len();
+        img.extend_from_slice(chunk);
+        img.resize(at + cs, 0);
+        let entry = cs * 2 + i * 8;
+        img[entry..entry + 8].copy_from_slice(&(at as u64).to_be_bytes());
+    }
+    let out = raw_path.with_file_name(name);
+    std::fs::write(&out, img).unwrap();
+    std::fs::remove_file(raw_path).unwrap();
+    out
+}
+
 fn check(name: &str, tag: &str) {
-    let d = scratch(tag);
+    check_as(name, tag, None)
+}
+
+fn check_as(name: &str, tag: &str, qcow2_name: Option<&str>) {
+    let d = scratch(&format!("{}{}", tag, qcow2_name.map(|_| "_q").unwrap_or("")));
     let img = gunzip_fixture(name, &d);
+    let img = match qcow2_name {
+        Some(n) => as_qcow2(&img, n),
+        None => img,
+    };
     let staging = d.join("staging");
     std::fs::create_dir_all(&staging).unwrap();
     let out = caarea::ingest::image::unpack_disk_image(&img, &staging, true).expect("unpack");
@@ -63,4 +106,15 @@ fn gpt_xfs_partition_is_staged_and_parsed() {
 #[test]
 fn lvm_xfs_logical_volume_is_staged_and_parsed() {
     check("mbr_lvm_xfs.img", "lvmxfs");
+}
+
+#[test]
+fn gpt_xfs_partition_inside_a_qcow2() {
+    check_as("gpt_xfs.img", "xfs", Some("vm-100-disk-0.qcow2"));
+}
+
+/// A QCOW2 with a name that says nothing, as a cloud image has: known by its content.
+#[test]
+fn lvm_xfs_inside_a_qcow2_with_no_extension() {
+    check_as("mbr_lvm_xfs.img", "lvmxfs", Some("b3f1c2d4-image"));
 }

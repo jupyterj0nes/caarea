@@ -23,7 +23,7 @@ pub fn build_cli() -> Command {
                 .short('f')
                 .long("file")
                 .value_name("PATH")
-                .help("Single artifact, archive or disk image to process: EVTX, hive, E01/RAW/VMDK/VHD(X) or any file whose content is a disk image (a cloud snapshot with no extension), ZIP/TAR, log (repeatable)")
+                .help("Single artifact, archive or disk image to process: EVTX, hive, E01/RAW/VMDK/VHD(X)/QCOW2 or any file whose content is a disk image (a cloud snapshot with no extension), ZIP/TAR, log (repeatable)")
                 .action(ArgAction::Append),
         )
         .arg(

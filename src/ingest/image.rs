@@ -53,7 +53,7 @@ pub fn is_image_file(path: &Path) -> bool {
         None => return false,
     };
     let Some((_, ext)) = filename.rsplit_once('.') else { return false };
-    matches!(ext, "e01" | "ex01" | "vmdk" | "vhd" | "vhdx" | "dd" | "raw" | "img")
+    matches!(ext, "e01" | "ex01" | "vmdk" | "vhd" | "vhdx" | "qcow2" | "qcow" | "dd" | "raw" | "img")
         || is_ewf_segment_ext(ext)
         || (ext.len() == 3 && ext.bytes().all(|b| b.is_ascii_digit()))
 }
@@ -84,7 +84,8 @@ fn is_supported_image_name(path: &Path) -> bool {
         return !(is_flat || is_ctk || is_split || is_snapshot);
     }
 
-    filename.ends_with(".vhd") || filename.ends_with(".vhdx")
+    // QEMU disks: one file each (an overlay reads its backing file by itself)
+    filename.ends_with(".vhd") || filename.ends_with(".vhdx") || filename.ends_with(".qcow2") || filename.ends_with(".qcow")
 }
 
 /// What a disk image is, as far as the readers go.
@@ -94,7 +95,8 @@ pub enum ImageKind {
     Ewf,
     /// VMware virtual disk (descriptor or monolithic sparse extent)
     Vmdk,
-    /// Microsoft virtual disk, VHD (fixed, dynamic, differencing) or VHDX
+    /// A virtual disk opened by [`super::vhd::open_virtual_disk`]: Microsoft VHD
+    /// (fixed, dynamic, differencing) or VHDX, or QEMU QCOW2
     Vhd,
     /// A plain byte-for-byte copy of a disk or a volume
     Raw,
@@ -108,7 +110,7 @@ pub const SNIFF_MIN_SIZE: u64 = 64 * 1024;
 ///
 /// Container formats by their magic: EWF (`EVF`), VHDX (`vhdxfile`), VHD
 /// (`conectix` at the start for dynamic disks, at the end for fixed ones, as
-/// Azure and Hyper-V export them), VMDK sparse (`KDMV`). A raw copy by what a
+/// Azure and Hyper-V export them), QCOW2 (`QFI\xfb`), VMDK sparse (`KDMV`). A raw copy by what a
 /// disk or a volume starts with: a GPT header, an MBR with a valid partition
 /// entry, an NTFS boot sector, an ext2/3/4 superblock, an XFS superblock or an
 /// LVM label.
@@ -120,6 +122,9 @@ pub fn image_kind_from_bytes(head: &[u8], tail: &[u8]) -> Option<ImageKind> {
         return Some(ImageKind::Ewf);
     }
     if head.starts_with(b"vhdxfile") || head.starts_with(b"conectix") || tail.starts_with(b"conectix") {
+        return Some(ImageKind::Vhd);
+    }
+    if head.starts_with(super::qcow2::QCOW_MAGIC) {
         return Some(ImageKind::Vhd);
     }
     if head.starts_with(b"KDMV") {
@@ -185,7 +190,7 @@ pub fn image_kind(path: &Path) -> ImageKind {
         ImageKind::Ewf
     } else if lower.ends_with(".vmdk") {
         ImageKind::Vmdk
-    } else if lower.ends_with(".vhd") || lower.ends_with(".vhdx") {
+    } else if lower.ends_with(".vhd") || lower.ends_with(".vhdx") || lower.ends_with(".qcow2") || lower.ends_with(".qcow") {
         ImageKind::Vhd
     } else {
         ImageKind::Raw
@@ -870,10 +875,10 @@ pub fn unpack_disk_image(
         process_seekable_image(&mut buf_reader, total_size, &live_dir, &vss_root, silent)?
     } else if kind == ImageKind::Vhd {
         let (vhd_reader, total_size) =
-            crate::ingest::vhd::open_virtual_disk(&path_str).map_err(|e| format!("Failed to open VHD/VHDX image: {}", e))?;
+            crate::ingest::vhd::open_virtual_disk(&path_str).map_err(|e| format!("Failed to open virtual disk: {}", e))?;
         log_message(
             silent,
-            &format!("  ├─ VHD/VHDX virtual disk capacity: {:.2} GB", total_size as f64 / 1_073_741_824.0),
+            &format!("  ├─ Virtual disk capacity: {:.2} GB", total_size as f64 / 1_073_741_824.0),
         );
 
         let mut buf_reader = BufReader::new(vhd_reader);

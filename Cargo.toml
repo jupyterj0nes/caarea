@@ -17,6 +17,8 @@ sootmark_registry = { package = "sootmark-registry", version = "0.7.0" }
 zip = "0.6"
 tar = "0.4"
 flate2 = "1.0"
+# zstd-compressed clusters of QCOW2 images (already built for the journal reader)
+zstd = { version = "0.13", default-features = false }
 walkdir = "2.3"
 ewf = "0.4"
 ntfs = "0.4"

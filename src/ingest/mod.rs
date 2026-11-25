@@ -4,6 +4,7 @@ pub mod linux_image;
 pub mod xfs_image;
 pub mod live;
 pub mod triage;
+pub mod qcow2;
 pub mod vhd;
 pub mod vmdk;
 

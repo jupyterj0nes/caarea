@@ -369,7 +369,7 @@ impl Seek for VhdxReader {
     }
 }
 
-/// Open a `.vhd` or `.vhdx` by extension as a boxed `Read + Seek`, with the
+/// Open a VHD, a VHDX or a QCOW2 as a boxed `Read + Seek`, with the
 /// virtual size, for the image walkers.
 pub fn open_virtual_disk(path: &str) -> Result<(Box<dyn ReadSeek>, u64), String> {
     let ext = Path::new(path).extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).unwrap_or_default();
@@ -377,6 +377,16 @@ pub fn open_virtual_disk(path: &str) -> Result<(Box<dyn ReadSeek>, u64), String>
     // the name only for a file whose first bytes cannot be read
     let mut magic = [0u8; 8];
     let head = std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut magic)).ok().map(|_| magic);
+    // a QEMU disk, by its magic or, unreadable, by its name
+    let is_qcow = match head {
+        Some(m) => &m[..4] == super::qcow2::QCOW_MAGIC,
+        None => ext == "qcow2" || ext == "qcow",
+    };
+    if is_qcow {
+        let r = super::qcow2::Qcow2Reader::open(path)?;
+        let n = r.total_size();
+        return Ok((Box::new(r), n));
+    }
     let is_vhdx = match head {
         Some(m) => &m == b"vhdxfile" || (ext == "vhdx" && &m != b"conectix"),
         None => ext == "vhdx",

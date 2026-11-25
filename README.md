@@ -45,7 +45,7 @@ cargo build --release          # binary in target/release/caarea[.exe]
 
 | You have | Run |
 | :--- | :--- |
-| A disk image (E01, Ex01, raw, dd) or a virtual disk (VMDK, VHD, VHDX) | `caarea -f disk.E01 -o out.csv` |
+| A disk image (E01, Ex01, raw, dd) or a virtual disk (VMDK, VHD, VHDX, QCOW2) | `caarea -f disk.E01 -o out.csv` |
 | A cloud snapshot with no extension (an Azure OS disk export): recognised by its content | `caarea -f snap-HOST_os_disk-20261116 -o out.csv` |
 | A running Windows host (triage in place, as administrator) | `caarea -f \\.\C: -o out.csv --stage-dir D:\case\extracted` |
 | Triage packages (KAPE, Velociraptor, UAC, Cortex XDR offline collector and online triage, CyLR), zipped or not | `caarea -d /path/to/packages -o out.csv` |
@@ -76,7 +76,7 @@ timestamp,computer,artifact,event_id,state,target_username,reserved_1,processnam
 | **Registry** | BAM/DAM, ShimCache, services, Run keys, TaskCache, IFEO / Winlogon / AppInit, UserAssist, RunMRU, RecentDocs, MUICache, FeatureUsage, CapabilityAccessManager, Office TrustRecords; dirty hives repaired from their logs, freed cells included |
 | **NTFS** | `$MFT` (binaries and scripts written outside the system folders, resident script content quoted, freed records) and `$UsnJrnl:$J` (every Prefetch rewrite, drops, renames, deletions, log truncation) |
 | **Linux** | `pacct`, `audit.log`, the binary systemd journal, `auth.log` / `secure` / `syslog` / `cron`, shell and REPL histories, `dpkg` / `apt` / `dnf` / `pacman` / `zypper`, cron and systemd units and timers, `wtmp` / `btmp`, Docker / containerd / podman, cloud-init, web server access logs, UAC process listings |
-| **Containers of all that** | E01 / Ex01, raw, VMDK, VHD / VHDX, live volumes, **every Volume Shadow Copy**, ext2/3/4 and XFS partitions, plain or inside LVM2, KAPE / Velociraptor / UAC / Cortex XDR / CyLR packages, zips and tarballs nested five deep |
+| **Containers of all that** | E01 / Ex01, raw, VMDK, VHD / VHDX, QCOW2, live volumes, **every Volume Shadow Copy**, ext2/3/4 and XFS partitions, plain or inside LVM2, KAPE / Velociraptor / UAC / Cortex XDR / CyLR packages, zips and tarballs nested five deep |
 
 Event ids, keys and the notes on each source: [What it reads →](docs/sources.md)
 
